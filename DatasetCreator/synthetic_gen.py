@@ -9,18 +9,26 @@ import os
 import pickle as pkl
 import numpy as np
 
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 import random
 
+file_path = os.path.abspath(__file__)
+main_directory = os.path.dirname(file_path)
+
+main_directory = main_directory.replace(os.sep, '/')
+
 # The path relative to system must be entered here. "/Output" means C:/Output/ in a Windows system
-RENDER_DIR = "/Output"
+RENDER_DIR = main_directory + "/Output"
 
 SPECULAR_DIR = RENDER_DIR + "/Specular/"
 
 DIFFUSE_DIR = RENDER_DIR + "/Diffuse/"
 
 MATRIX_DIR = RENDER_DIR + "/Matrix/"
+
+LOCATIONS_DIR = RENDER_DIR + "/Locations/"
 
 
 def enable_gpus(device_type, use_cpus=False):
@@ -121,7 +129,7 @@ def set_scene_objects() -> bpy.types.Object:
     bpy.ops.object.empty_add(location=(0.3, -0.75, 1.0))
 
     focus_target_2 = bpy.context.object
-    return principles, focus_target_1, focus_target_2
+    return principles, objects, focus_target_1, focus_target_2
 
 
 def set_diffuse(principles):
@@ -249,10 +257,39 @@ def write_matrices(camera_object, file_name, view):
     rt_file.close()
 
 
+def get_item_locations(camera_object, objects_in_scene):
+    rt_matrix = get_RT_matrix(camera_object)
+
+    full_matrix = np.zeros((4, 4))
+    full_matrix[:-1, :] = rt_matrix
+    full_matrix[3][3] = 1
+
+    item_locations = []
+    for item in objects_in_scene:
+        location, rotation = item.matrix_world.decompose()[0:2]
+
+        loc = np.zeros(4)
+        loc[:-1] = location
+        loc[3] = 1
+
+        item_location = full_matrix @ loc
+
+        item_locations.append([item_location[1], item_location[0], item_location[2]])
+
+    item_locations = np.asarray(item_locations)
+    return np.asarray(item_locations)
+
+
 def generate(resolution, sample_count, data_count):
     enable_gpus("CUDA")
 
     write_matrix = True
+
+    if not os.path.exists(RENDER_DIR):
+        os.mkdir(RENDER_DIR)
+
+    if not os.path.exists(LOCATIONS_DIR):
+        os.mkdir(LOCATIONS_DIR)
 
     for render_num in range(0, data_count):
 
@@ -265,7 +302,7 @@ def generate(resolution, sample_count, data_count):
         utils.clean_objects()
 
         # Set scene
-        principles, focus_target_1, focus_target_2 = set_scene_objects()
+        principles, objects_in_scene, focus_target_1, focus_target_2 = set_scene_objects()
 
         # Set lights
         light_object_1 = generate_light(energy=10000, name='light_1', light_type='POINT')
@@ -285,15 +322,15 @@ def generate(resolution, sample_count, data_count):
         utils.add_track_to_constraint(camera_object_2, focus_target_2)
         utils.set_camera_params(camera_object_2.data, focus_target_2, lens=85, fstop=0.5)
 
-        file_name = str(render_num) + "_"
+        file_name = str(render_num)
 
-        utils.set_output_properties(scene, resolution, (SPECULAR_DIR + file_name + "1"))
+        utils.set_output_properties(scene, resolution, (SPECULAR_DIR + file_name + "_1"))
         utils.set_cycles_renderer(scene, camera_object_1, sample_count)
 
         # Render first specular view
         bpy.ops.render.render(write_still=True)
 
-        utils.set_output_properties(scene, resolution, (SPECULAR_DIR + file_name + "2"))
+        utils.set_output_properties(scene, resolution, (SPECULAR_DIR + file_name + "_2"))
         utils.set_cycles_renderer(scene, camera_object_2, sample_count)
 
         # Render second specular view
@@ -312,24 +349,30 @@ def generate(resolution, sample_count, data_count):
         dg = bpy.context.evaluated_depsgraph_get()
         dg.update()
 
-        utils.set_output_properties(scene, resolution, (DIFFUSE_DIR + file_name + "1"))
+        utils.set_output_properties(scene, resolution, (DIFFUSE_DIR + file_name + "_1"))
         utils.set_cycles_renderer(scene, camera_object_1, sample_count)
 
         # Render first diffuse view
         bpy.ops.render.render(write_still=True)
 
         if write_matrix:
-            write_matrices(camera_object_1, file_name, '1')
+            write_matrices(camera_object_1, file_name, '_1')
 
-        utils.set_output_properties(scene, resolution, (DIFFUSE_DIR + file_name + "2"))
+        utils.set_output_properties(scene, resolution, (DIFFUSE_DIR + file_name + "_2"))
         utils.set_cycles_renderer(scene, camera_object_2, sample_count)
 
         # Render second diffuse view
         bpy.ops.render.render(write_still=True)
 
         if write_matrix:
-            write_matrices(camera_object_2, file_name, '2')
+            write_matrices(camera_object_2, file_name, '_2')
             write_matrix = False
+
+        item_locations = get_item_locations(camera_object_1, objects_in_scene)
+
+        loc_file = open(f'{LOCATIONS_DIR}location_{file_name}', 'wb')
+        pkl.dump(item_locations, loc_file)
+        loc_file.close()
 
 
 # Args

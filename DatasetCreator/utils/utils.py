@@ -3,10 +3,6 @@ import math
 from typing import Tuple
 from utils.node import arrange_nodes
 
-################################################################################
-# Scene
-################################################################################
-
 
 def build_rgb_background(world: bpy.types.World,
                          rgb: Tuple[float, float, float, float] = (0.9, 0.9, 0.9, 1.0),
@@ -22,8 +18,6 @@ def build_rgb_background(world: bpy.types.World,
     node_tree.links.new(rgb_node.outputs["Color"], node_tree.nodes["Background"].inputs["Color"])
 
     arrange_nodes(node_tree)
-
-
 
 
 def set_output_properties(scene: bpy.types.Scene, resolution_percentage: int = 100, output_file_path: str = "") -> None:
@@ -52,21 +46,11 @@ def set_cycles_renderer(scene: bpy.types.Scene,
     scene.cycles.samples = num_samples
 
 
-################################################################################
-# Constraints
-################################################################################
-
-
 def add_track_to_constraint(camera_object: bpy.types.Object, track_to_target_object: bpy.types.Object) -> None:
     constraint = camera_object.constraints.new(type='LOCKED_TRACK')
     constraint.target = track_to_target_object
     constraint.track_axis = 'TRACK_NEGATIVE_Z'
     constraint.lock_axis = 'LOCK_X'
-
-
-################################################################################
-# Misc.
-################################################################################
 
 
 def clean_objects() -> None:
