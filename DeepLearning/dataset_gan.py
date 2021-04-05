@@ -9,8 +9,10 @@ num_objects = 6
 image_size = 256
 pairs = 2
 
-specular_dir = "Dataset/Specular_multi/"
-diffuse_dir = "Dataset/Diffuse_multi/"
+specular_dir = "Dataset/Specular/"
+diffuse_dir = "Dataset/Diffuse/"
+
+image_extension = '.png'
 
 
 class ImageDataSet(Sequence):
@@ -24,7 +26,7 @@ class ImageDataSet(Sequence):
         self.grayscale = 0
 
         self.data_num = len([name for name in os.listdir(self.specular_dir)
-                             if os.path.isfile(os.path.join(self.specular_dir, name))]) // 3
+                             if os.path.isfile(os.path.join(self.specular_dir, name))]) // pairs
 
         self.sequence = list(range(0, self.data_num))
         random.shuffle(self.sequence)
@@ -54,7 +56,7 @@ class ImageDataSet(Sequence):
             s_angle = []
             for y in range(1, pairs + 1):
 
-                s_view_1_name = self.specular_dir + str(x) + "_" + str(y) + ".png"
+                s_view_1_name = self.specular_dir + str(x) + "_" + str(y) + image_extension
                 s_view_1 = cv2.imread(s_view_1_name, flags=cv_flag)
                 s_view_1 = convert_image_to_hsv(s_view_1, gray=False, specular=True)
                 s_view_1 = s_view_1 / 127.5 - 1.0
@@ -64,7 +66,7 @@ class ImageDataSet(Sequence):
 
             d_angle = []
             for y in range(1, pairs + 1):
-                d_view_1_name = self.diffuse_dir + str(x) + "_" + str(y) + ".png"
+                d_view_1_name = self.diffuse_dir + str(x) + "_" + str(y) + image_extension
                 d_view_1 = cv2.imread(d_view_1_name, flags=cv_flag)
                 d_view_1 = convert_image_to_hsv(d_view_1, gray=False, specular=False)
                 d_view_1 = d_view_1 / 127.5 - 1.0

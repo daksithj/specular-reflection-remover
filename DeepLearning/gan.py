@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 batch_size = 1
 channels = 3
 image_pairs = 2
-image_size = 256
+image_size = 512
 feature_patch_size = 32
 image_shape = (image_size, image_size*image_pairs, channels)
 patch_shape = (feature_patch_size, feature_patch_size, 3)
@@ -77,7 +77,9 @@ def build_generator():
 
     # Encoder layers
 
-    down_64 = gen_encoder_block(input_layer, 64, batch_norm=False)
+    down_32 = gen_encoder_block(input_layer, 32, batch_norm=False)
+
+    down_64 = gen_encoder_block(down_32, 64)
 
     down_128 = gen_encoder_block(down_64, 128)
 
@@ -113,9 +115,11 @@ def build_generator():
 
     up_64 = gen_decoder_block(up_128, down_64, 64, dropout=False)
 
+    up_32 = gen_decoder_block(up_64, down_32, 32, dropout=False)
+
     # Output layer
     outer = layers.Conv2DTranspose(channels, kernel_size=4, strides=2, use_bias=g_bias, padding='same',
-                                   kernel_initializer=k_init)(up_64)
+                                   kernel_initializer=k_init)(up_32)
     output = layers.Activation(activation='tanh')(outer)
 
     model = Model(input_layer, output)
@@ -135,8 +139,13 @@ def build_discriminator():
 
     # Down layers
 
-    down_64 = layers.Conv2D(filters=64, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
+    down_32 = layers.Conv2D(filters=32, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
                             kernel_initializer=k_init)(input_layer)
+    down_32 = layers.LeakyReLU(alpha=0.2)(down_32)
+
+    down_64 = layers.Conv2D(filters=64, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
+                            kernel_initializer=k_init)(down_32)
+    down_64 = layers.BatchNormalization()(down_64)
     down_64 = layers.LeakyReLU(alpha=0.2)(down_64)
 
     down_128 = layers.Conv2D(filters=128, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
@@ -443,3 +452,5 @@ def test_generator(model_name=None):
 
     cv2.imshow("Output", output)
     cv2.waitKey(0) & 0xFF
+
+start_training()
