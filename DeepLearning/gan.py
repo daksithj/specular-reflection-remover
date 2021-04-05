@@ -452,5 +452,3 @@ def test_generator(model_name=None):
 
     cv2.imshow("Output", output)
     cv2.waitKey(0) & 0xFF
-
-start_training()

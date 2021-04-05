@@ -7,19 +7,34 @@ from DeepLearning.tools import translate_image, prepare_input, convert_image_to_
 from DatasetCreator.segment_dataset import extract_segments, get_patch
 from DeepLearning.reflection_remover import get_diffuse
 from PoseEstimation.pose_estimator import get_pose, get_disparity_map_matrix
+from PoseEstimation.evaluate_pose import calculate_error, read_actual_locations
 
 test_pairs = 3
 
 
 def test_full():
-    image_1 = cv2.imread('Dataset/Test/0_1.png')
-    image_2 = cv2.imread('Dataset/Test/0_2.png')
+
+    data_loc = 'Dataset/Test'
+    data_num = 0
+
+    image_1 = cv2.imread(f'{data_loc}/{data_num}_1.png')
+    image_2 = cv2.imread(f'{data_loc}/{data_num}_2.png')
 
     output_1, output_2 = get_diffuse(image_1, image_2)
 
-    disparity_map_matrix = get_disparity_map_matrix('Dataset/Test', output_1.shape[:2])
+    disparity_map_matrix = get_disparity_map_matrix(data_loc, output_1.shape[:2])
 
-    get_pose(output_1, output_2, disparity_map_matrix, draw_line=True)
+    poses = get_pose(output_1, output_2, disparity_map_matrix, draw_line=True, draw_real=data_num)
+
+    location_set = []
+
+    for pose in poses:
+        location_set.append(pose['location'])
+
+    real_locations = read_actual_locations(data_loc, data_num)
+    location_error = calculate_error(real_locations, location_set)
+
+    print(f'Distance error of all locations: {location_error}')
 
 
 def generate_full_samples(model_name=None):
@@ -67,4 +82,5 @@ def generate_full_samples(model_name=None):
         cv2.waitKey(0)
 
 
-test_full()
+if __name__ == '__main__':
+    test_full()

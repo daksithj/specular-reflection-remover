@@ -31,10 +31,14 @@ def get_closest_location(real_locations, location):
     return closest_loc
 
 
-def print_actual_locations(image, poses, folder, data_num):
+def calculate_error(real_locations, locations):
 
-    real_locations = read_actual_locations(folder, data_num)
+    total_error = 0
 
-    for pose in poses:
-        location = pose['location']
-        closest = get_closest_location(real_locations, np.asarray(location))
+    for loc in locations:
+        closest = get_closest_location(real_locations, loc)
+        squared_dist = np.sum((closest - loc) ** 2, axis=0)
+        dist = np.sqrt(squared_dist)
+        total_error += dist
+
+    return total_error

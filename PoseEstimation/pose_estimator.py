@@ -6,6 +6,7 @@ import math
 from random import randint
 
 from PoseEstimation.object_detection import get_object_masks
+from PoseEstimation.evaluate_pose import get_closest_location, read_actual_locations
 
 
 def downsample_image(image, reduce_factor):
@@ -144,8 +145,8 @@ def get_3d_points(disparity_map, disparity_map_matrix):
 
             w = disp * displacement
             z = focal_length/w
-            y = (b + principle_point_x)/w
-            x = (a + principle_point_y)/w
+            y = (b + principle_point_y)/w
+            x = (a + principle_point_x)/w
 
             location_map[a][b][0] = x
             location_map[a][b][1] = y
@@ -327,6 +328,17 @@ def draw_axis(img, object_point, centre, axis_point_1, lambda_map, disparity_map
     cv2.circle(img, (centre_x, centre_y), 4, colour, -1)
 
 
+def draw_real_locations(img, object_point, centre, lambda_map, disparity_map_matrix, data_num):
+
+    real_locations = read_actual_locations('Dataset/Test', data_num)
+
+    closest = get_closest_location(real_locations, centre)
+
+    centre_x, centre_y = get_image_coordinates(closest, lambda_map, object_point, disparity_map_matrix)
+
+    cv2.circle(img, (centre_x, centre_y), 4, (0, 0, 255), -1)
+
+
 # Plot and show the the depth
 def show_depth_maps(object_points):
 
@@ -342,7 +354,7 @@ def show_object_masks(object_masks):
         cv2.waitKey(0)
 
 
-def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=False):
+def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=False, draw_real=None):
 
     object_masks = get_object_masks(img_1, k_1=7, k_2=2)
     disparity_map = get_disparity_map(img_1, img_2)
@@ -365,6 +377,9 @@ def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=Fa
 
         if draw_line:
             draw_axis(img_1, item, centre, axis_point_1, lambda_map, disparity_map_matrix, colour=colour)
+
+        if draw_real is not None:
+            draw_real_locations(img_1, item, centre, lambda_map, disparity_map_matrix, draw_real)
 
     if draw_points or draw_line:
         cv2.imshow('Window', img_1)
