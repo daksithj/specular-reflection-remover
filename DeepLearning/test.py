@@ -15,7 +15,7 @@ def test_full():
     image_1 = cv2.imread('Dataset/Test/0_1.png')
     image_2 = cv2.imread('Dataset/Test/0_2.png')
 
-    output_1, output_2 = get_diffuse(image_1, image_2, model_name='9')
+    output_1, output_2 = get_diffuse(image_1, image_2)
 
     disparity_map_matrix = get_disparity_map_matrix('Dataset/Test', output_1.shape[:2])
 
