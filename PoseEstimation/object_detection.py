@@ -2,9 +2,7 @@ import cv2
 import numpy as np
 
 
-# Segment objects and get masks for each individual objects
-def get_object_masks(img, k_1=7, k_2=2):
-
+def get_colour_masks(img, k_1, k_2):
     # Convert to HSV format
     img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
@@ -55,6 +53,14 @@ def get_object_masks(img, k_1=7, k_2=2):
         colour_masks.append(mask)
 
     colour_masks.pop(background_idx)
+
+    return colour_masks
+
+
+# Segment objects and get masks for each individual objects
+def get_object_masks(img, k_1=7, k_2=2):
+
+    colour_masks = get_colour_masks(img, k_1, k_2)
 
     object_masks = []
 

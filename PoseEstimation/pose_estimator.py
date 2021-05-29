@@ -208,9 +208,9 @@ def get_image_coordinates(coordinates, lambda_map, object_point, disparity_map_m
     w = np.mean([lambda_map[x_1][x_2], lambda_map[y_1][y_2], lambda_map[z_1][z_2]])
 
     if w <= 0:
-        raise Exception('No corresponding disparity to calculate the point')
-
-    c, d = project_2d_point(y, x, w, disparity_map_matrix)
+        c, d = 0, 0
+    else:
+        c, d = project_2d_point(y, x, w, disparity_map_matrix)
     return c, d
 
 
@@ -356,7 +356,7 @@ def show_object_masks(object_masks):
 
 def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=False, draw_real=None):
 
-    object_masks = get_object_masks(img_1, k_1=7, k_2=2)
+    object_masks = get_object_masks(img_1, k_1=15, k_2=3)
     disparity_map = get_disparity_map(img_1, img_2)
 
     location_map, lambda_map, disparity_map_matrix = get_3d_points(disparity_map, disparity_map_matrix)

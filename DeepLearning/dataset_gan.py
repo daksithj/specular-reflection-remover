@@ -4,6 +4,7 @@ import os
 import random
 import cv2
 import numpy as np
+import pickle as pkl
 
 num_objects = 6
 image_size = 256
@@ -11,8 +12,12 @@ pairs = 2
 
 specular_dir = "Dataset/Specular/"
 diffuse_dir = "Dataset/Diffuse/"
+location_dir = "Dataset/Locations/"
+matrix_dir = "Dataset/Matrix/"
 
 image_extension = '.png'
+location_file_prefix = 'location_'
+location_extension = ""
 
 
 class ImageDataSet(Sequence):
@@ -22,6 +27,8 @@ class ImageDataSet(Sequence):
         self.batch_size = batch_size
         self.specular_dir = specular_dir
         self.diffuse_dir = diffuse_dir
+        self.location_dir = location_dir
+        self.matrix_dir = matrix_dir
 
         self.grayscale = 0
 
@@ -52,6 +59,9 @@ class ImageDataSet(Sequence):
         s_views = []
 
         d_views = []
+
+        locations = []
+
         for x in im_range:
             s_angle = []
             for y in range(1, pairs + 1):
@@ -74,7 +84,12 @@ class ImageDataSet(Sequence):
             d_image = np.concatenate(d_angle, axis=1)
             d_views.append(d_image)
 
-        return np.asarray(s_views), np.asarray(d_views)
+            location_file = open(self.location_dir + location_file_prefix + str(x) + location_extension, 'rb')
+            obj_locations = pkl.load(location_file)
+            locations.append(obj_locations)
+            location_file.close()
+
+        return np.asarray(s_views), [np.asarray(d_views), locations]
 
     def on_epoch_end(self):
         random.shuffle(self.sequence)

@@ -41,4 +41,4 @@ def calculate_error(real_locations, locations):
         dist = np.sqrt(squared_dist)
         total_error += dist
 
-    return total_error
+    return total_error/len(locations)

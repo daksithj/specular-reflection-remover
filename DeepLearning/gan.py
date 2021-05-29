@@ -2,6 +2,8 @@ import tensorflow as tf
 from tensorflow import keras
 from DeepLearning.dataset_gan import ImageDataSet
 from DeepLearning.tools import translate_image
+from PoseEstimation.pose_estimator import get_disparity_map_matrix, get_pose
+from PoseEstimation.evaluate_pose import read_actual_locations, calculate_error
 from tensorflow.keras import layers, Model
 from tensorflow.keras import backend as keras_backend
 import numpy as np
@@ -18,13 +20,27 @@ image_size = 512
 feature_patch_size = 32
 image_shape = (image_size, image_size*image_pairs, channels)
 patch_shape = (feature_patch_size, feature_patch_size, 3)
+filter_thresh = 512
 summary_location = 'Summary/'
 model_location = 'Models/'
+matrix_location = 'Dataset/Matrix'
 g_lr = 0.0002
 d_lr = 0.0002
 
 g_bias = False
 d_bias = False
+
+discriminator_loss = 'binary_crossentropy'
+generator_loss = 'mae'
+use_vgg_loss = True
+use_location_loss = False
+
+discriminator_loss_weight = 1
+generator_loss_weight = 80
+vgg_loss_weight = 20
+location_loss_weight = 20
+
+disparity_map_matrix = get_disparity_map_matrix(matrix_location, (image_size, image_size))
 
 VGG_net = tf.keras.applications.VGG19(
         include_top=False,
@@ -70,56 +86,60 @@ def gen_decoder_block(input_layer, skip_layer, filters, dropout=True):
 
 
 def build_generator():
-
     k_init = keras.initializers.RandomNormal(stddev=0.02)
 
     input_layer = layers.Input(shape=image_shape)
 
+    layer_num = int(np.log2(image_size)) - 1
+
+    filter_size = image_size // 16
+
     # Encoder layers
 
-    down_32 = gen_encoder_block(input_layer, 32, batch_norm=False)
+    encoding_layers = []
 
-    down_64 = gen_encoder_block(down_32, 64)
+    down = input_layer
 
-    down_128 = gen_encoder_block(down_64, 128)
+    batch_norm = False
 
-    down_256 = gen_encoder_block(down_128, 256)
+    for _ in range(layer_num):
 
-    down_512_1 = gen_encoder_block(down_256, 512)
+        down = gen_encoder_block(down, filter_size, batch_norm=batch_norm)
 
-    down_512_2 = gen_encoder_block(down_512_1, 512)
+        if not batch_norm:
+            batch_norm = True
 
-    down_512_3 = gen_encoder_block(down_512_2, 512)
+        if filter_size < filter_thresh:
+            filter_size = filter_size * 2
 
-    down_512_4 = gen_encoder_block(down_512_3, 512)
+        encoding_layers.append(down)
 
     # Inner layer
-    inner = layers.Conv2D(filters=512, kernel_size=4, strides=2, use_bias=g_bias, padding='same',
-                          kernel_initializer=k_init)(down_512_4)
+    inner = layers.Conv2D(filters=filter_thresh, kernel_size=4, strides=2, use_bias=g_bias, padding='same',
+                          kernel_initializer=k_init)(down)
 
-    inner = layers.Activation('relu')(inner)
+    up = layers.Activation('relu')(inner)
 
     # Decoder layers
 
-    up_512_4 = gen_decoder_block(inner, down_512_4, 512)
+    encoding_layers.reverse()
 
-    up_512_3 = gen_decoder_block(up_512_4, down_512_3, 512)
+    drop_count = layer_num - int(np.log2(filter_size))
 
-    up_512_2 = gen_decoder_block(up_512_3, down_512_2, 512)
+    dropout = True
 
-    up_512_1 = gen_decoder_block(up_512_2, down_512_1, 512, dropout=False)
+    for down_layer in encoding_layers:
 
-    up_256 = gen_decoder_block(up_512_1, down_256, 256, dropout=False)
+        up = gen_decoder_block(up, down_layer, down_layer.shape[3], dropout=dropout)
 
-    up_128 = gen_decoder_block(up_256, down_128, 128, dropout=False)
-
-    up_64 = gen_decoder_block(up_128, down_64, 64, dropout=False)
-
-    up_32 = gen_decoder_block(up_64, down_32, 32, dropout=False)
+        if drop_count == 0:
+            dropout = False
+        else:
+            drop_count -= 1
 
     # Output layer
     outer = layers.Conv2DTranspose(channels, kernel_size=4, strides=2, use_bias=g_bias, padding='same',
-                                   kernel_initializer=k_init)(up_32)
+                                   kernel_initializer=k_init)(up)
     output = layers.Activation(activation='tanh')(outer)
 
     model = Model(input_layer, output)
@@ -127,9 +147,26 @@ def build_generator():
     return model
 
 
+def discriminator_block(input_layer, filters, strides, k_init, batch_norm=True):
+
+    layer = layers.Conv2D(filters=filters, kernel_size=4, strides=strides, use_bias=d_bias, padding='same',
+                          kernel_initializer=k_init)(input_layer)
+
+    if batch_norm:
+        layer = layers.BatchNormalization()(layer)
+
+    layer = layers.LeakyReLU(alpha=0.2)(layer)
+
+    return layer
+
+
 def build_discriminator():
 
     k_init = keras.initializers.RandomNormal(stddev=0.02)
+
+    layer_num = int(np.log2(image_size)) - 3
+
+    filter_size = image_size // 16
 
     input_source = layers.Input(shape=image_shape)
 
@@ -138,38 +175,27 @@ def build_discriminator():
     input_layer = layers.Concatenate()([input_source, input_target])
 
     # Down layers
+    batch_norm = False
 
-    down_32 = layers.Conv2D(filters=32, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
-                            kernel_initializer=k_init)(input_layer)
-    down_32 = layers.LeakyReLU(alpha=0.2)(down_32)
+    strides = 2
 
-    down_64 = layers.Conv2D(filters=64, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
-                            kernel_initializer=k_init)(down_32)
-    down_64 = layers.BatchNormalization()(down_64)
-    down_64 = layers.LeakyReLU(alpha=0.2)(down_64)
+    down = input_layer
 
-    down_128 = layers.Conv2D(filters=128, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
-                             kernel_initializer=k_init)(down_64)
-    down_128 = layers.BatchNormalization()(down_128)
-    down_128 = layers.LeakyReLU(alpha=0.2)(down_128)
+    for num in range(layer_num):
 
-    down_256 = layers.Conv2D(filters=256, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
-                             kernel_initializer=k_init)(down_128)
-    down_256 = layers.BatchNormalization()(down_256)
-    down_256 = layers.LeakyReLU(alpha=0.2)(down_256)
+        if num == layer_num - 1:
+            strides = 1
 
-    down_512 = layers.Conv2D(filters=512, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
-                             kernel_initializer=k_init)(down_256)
-    down_512 = layers.BatchNormalization()(down_512)
-    down_512 = layers.LeakyReLU(alpha=0.2)(down_512)
+        down = discriminator_block(down, filter_size, strides=strides, k_init=k_init, batch_norm=batch_norm)
 
-    down_512_2 = layers.Conv2D(filters=512, kernel_size=4, use_bias=d_bias, padding='same',
-                               kernel_initializer=k_init)(down_512)
-    down_512_2 = layers.BatchNormalization()(down_512_2)
-    down_512_2 = layers.LeakyReLU(alpha=0.2)(down_512_2)
+        if not batch_norm:
+            batch_norm = True
+
+        if filter_size < filter_thresh:
+            filter_size = filter_size * 2
 
     output = layers.Conv2D(filters=1, kernel_size=4, use_bias=d_bias, padding='same',
-                           kernel_initializer=k_init)(down_512_2)
+                           kernel_initializer=k_init)(down)
 
     output = layers.Activation(activation='sigmoid')(output)
 
@@ -282,6 +308,41 @@ def build_patch_VGG(y_true, y_predict):
     return total_loss/2
 
 
+def location_loss(locations, y_predict):
+
+    locations = keras_backend.eval(locations)
+
+    predict_1 = y_predict[:, :, 0:image_size, :]
+    predict_2 = y_predict[:, :, image_size: 2 * image_size, :]
+
+    predict_1 = keras_backend.eval(predict_1)
+    predict_2 = keras_backend.eval(predict_2)
+
+    predict_1 = np.squeeze(predict_1, axis=0)
+    predict_2 = np.squeeze(predict_2, axis=0)
+
+    predict_1 = np.uint8(predict_1)
+    predict_2 = np.uint8(predict_2)
+
+    poses = get_pose(predict_1, predict_2, disparity_map_matrix)
+
+    num_obj_error = np.abs((len(poses) - len(locations)))
+
+    if len(poses) > 0:
+        location_set = []
+
+        for pose in poses:
+            location_set.append(pose['location'])
+
+        location_error = calculate_error(np.asarray(locations), location_set)
+
+        total_error = num_obj_error * location_error
+    else:
+        total_error = 0
+
+    return total_error
+
+
 def build_gan(gen_model, dis_model):
 
     for layer in dis_model.layers:
@@ -294,12 +355,25 @@ def build_gan(gen_model, dis_model):
 
     dis_out = dis_model([input_layer, gen_out])
 
-    model = Model(input_layer, [dis_out, gen_out, gen_out])
+    model_output = [dis_out, gen_out]
+    loss = [discriminator_loss, generator_loss]
+    loss_weights = [discriminator_loss_weight, generator_loss_weight]
+
+    if use_vgg_loss:
+        loss.append(build_patch_VGG)
+        loss_weights.append(vgg_loss_weight)
+        model_output.append(gen_out)
+
+    if use_location_loss:
+        loss.append(location_loss)
+        loss_weights.append(location_loss_weight)
+        model_output.append(gen_out)
+
+    model = Model(input_layer, model_output)
 
     optimizer = keras.optimizers.Adam(lr=g_lr, beta_1=0.5)
 
-    model.compile(loss=['binary_crossentropy', 'mae', build_patch_VGG], optimizer=optimizer, loss_weights=[1, 80, 20],
-                  run_eagerly=True)
+    model.compile(loss=loss, optimizer=optimizer, loss_weights=loss_weights, run_eagerly=True)
 
     return model
 
@@ -325,7 +399,9 @@ def generate_test_sample(samples=1, pair=True):
 
     image_data_set = ImageDataSet(batch_size=samples)
 
-    specular_image, diffuse_image = image_data_set.__getitem__(0)
+    specular_image, target = image_data_set.__getitem__(0)
+
+    diffuse_image, _ = target
 
     specular_image = np.asarray(specular_image)
 
@@ -396,7 +472,9 @@ def train_gan(gen_model, dis_model, gan_model, data_set, epochs=100, cont_train=
     for epoch in range(epochs):
         for idx in range(data_len):
 
-            specular_real, diffuse_real = data_set.__getitem__(idx)
+            specular_real, target = data_set.__getitem__(idx)
+
+            diffuse_real, locations = target
 
             labels_real = tf.ones((batch_size, patch_size, patch_size*image_pairs, 1))
 
@@ -406,7 +484,17 @@ def train_gan(gen_model, dis_model, gan_model, data_set, epochs=100, cont_train=
 
             dis_loss_gen = dis_model.train_on_batch([specular_real, gen_out], gen_label)
 
-            gan_loss, _, _, _ = gan_model.train_on_batch(specular_real, [labels_real, diffuse_real, diffuse_real])
+            output_target = [labels_real, diffuse_real]
+
+            if use_vgg_loss:
+                output_target.append(diffuse_real)
+
+            if use_location_loss:
+                output_target.append(locations)
+
+            gan_losses = gan_model.train_on_batch(specular_real, output_target)
+
+            gan_loss = gan_losses[0]
 
             print('Epoch: %d  Step: %d Discriminator loss (target): [%.3f] Discriminator loss (Specular): [%.3f] '
                   'Generator loss: [%.3f]' % (epoch+1, idx + 1, dis_loss_real, dis_loss_gen, gan_loss))
@@ -452,3 +540,6 @@ def test_generator(model_name=None):
 
     cv2.imshow("Output", output)
     cv2.waitKey(0) & 0xFF
+
+
+start_training(True)

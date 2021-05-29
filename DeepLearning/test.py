@@ -34,7 +34,7 @@ def test_full():
     real_locations = read_actual_locations(data_loc, data_num)
     location_error = calculate_error(real_locations, location_set)
 
-    print(f'Distance error of all locations: {location_error}')
+    print(f'Average distance error of all locations: {location_error}')
 
 
 def generate_full_samples(model_name=None):
