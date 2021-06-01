@@ -3,6 +3,9 @@ import os
 import random
 from typing import Tuple, Optional
 
+file_path = os.path.abspath(__file__)
+util_directory = os.path.dirname(file_path)
+main_directory = os.path.dirname(util_directory)
 
 
 def create_plane(location: Tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -19,9 +22,9 @@ def create_plane(location: Tuple[float, float, float] = (0.0, 0.0, 0.0),
     return current_object
 
 
+def create_item(objects, location, num):
 
-def create_item(objects, location, num, subdivision_level: int = 2):
-    directory = "C:/Users/Daksith/Documents/Uni/Final year project/blender-cli-rendering-master/assets/models"
+    directory = main_directory + "/assets/models"
     file_name = random.choice(os.listdir(directory))
     file = directory + '/' + file_name
     bpy.ops.import_mesh.ply(filepath=file)
@@ -30,16 +33,13 @@ def create_item(objects, location, num, subdivision_level: int = 2):
     current_object.name = "Model_obj_" + str(num)
     loc = location.pop()
     current_object.location = loc
-    #current_object.dimensions = (random.randint(2, 3), random.randint(2, 3), random.randint(2, 3))
-    # Spoon
-    # current_object.dimensions = (0.75, 0.5, 5)
-    #current_object.dimensions = (3, 3, 3)
+
     dim = current_object.dimensions
     fac = 4 / max(dim)
     current_object.scale = (fac, fac, fac)
     current_object.rotation_euler = (random.uniform(-3.14159, 3.14159), random.uniform(-3.14159, 3.14159),
                                      random.uniform(-3.14159, 3.14159))
-    # add_subdivision_surface_modifier(current_object, subdivision_level)
+
     objects.append(current_object)
 
     return objects
@@ -59,7 +59,6 @@ def generate_items():
             loc_x = loc_x + 13 / 3
         loc_x = og_loc_x
         loc_y = loc_y + 8 / 2
-    # location.pop(0)
     random.shuffle(location)
 
     objects = []

@@ -1,445 +1,619 @@
 import tensorflow as tf
 from tensorflow import keras
 from DeepLearning.dataset_gan import ImageDataSet
-from DeepLearning.tools import translate_image
+from PoseEstimation.pose_estimator import get_disparity_map_matrix, get_pose
+from PoseEstimation.evaluate_pose import calculate_error
 from tensorflow.keras import layers, Model
 from tensorflow.keras import backend as keras_backend
 import numpy as np
 import random
+import json
 import os
-import glob
 import cv2
 import matplotlib.pyplot as plt
 
-batch_size = 1
-channels = 3
-image_pairs = 2
-image_size = 256
-feature_patch_size = 32
-image_shape = (image_size, image_size*image_pairs, channels)
-patch_shape = (feature_patch_size, feature_patch_size, 3)
-summary_location = 'Summary/'
-model_location = 'Models/'
-g_lr = 0.0002
-d_lr = 0.0002
-
-g_bias = False
-d_bias = False
-
-VGG_net = tf.keras.applications.VGG19(
-        include_top=False,
-        weights="imagenet",
-        input_tensor=None,
-        input_shape=patch_shape,
-        pooling=None,
-        classifier_activation="softmax",
-    )
+network_directory = 'DeepLearning/Networks/'
 
 
-def gen_encoder_block(input_layer, filters, batch_norm=True):
-    k_init = keras.initializers.RandomNormal(stddev=0.02)
+class SpecToPoseNet:
 
-    layer = layers.Conv2D(filters=filters, kernel_size=4, strides=2, use_bias=g_bias, padding='same',
-                          kernel_initializer=k_init)(input_layer)
+    def __init__(self, network_name, image_dataset: ImageDataSet):
 
-    if batch_norm:
+        self.batch_size = 1
+
+        self.image_dataset = image_dataset
+
+        self.channels = image_dataset.channels
+        self.image_pairs = image_dataset.pairs
+        self.image_size = image_dataset.image_size
+
+        self.image_shape = (self.image_size, self.image_size * self.image_pairs, self.channels)
+
+        self.network_name = network_name
+        self.network_location = network_directory + self.network_name + '/'
+        self.summary_location = self.network_location + 'Summary/'
+        self.matrix_location = image_dataset.matrix_dir
+        self.network_data_location = self.network_location + 'network_data.json'
+
+        self.feature_patch_size = 32
+        self.patch_shape = (self.feature_patch_size, self.feature_patch_size, 3)
+
+        self.filter_thresh = 512
+        self.g_lr = 0.0002
+        self.d_lr = 0.0002
+
+        self.g_bias = False
+        self.d_bias = False
+
+        self.discriminator_loss = 'binary_crossentropy'
+        self.generator_loss = 'mae'
+        self.use_vgg_loss = True
+        self.use_location_loss = False
+
+        self.discriminator_loss_weight = 1
+        self.generator_loss_weight = 80
+        self.vgg_loss_weight = 20
+        self.location_loss_weight = 20
+
+        self.disparity_map_matrix = get_disparity_map_matrix(self.matrix_location, (self.image_size, self.image_size))
+
+        self.VGG_net = tf.keras.applications.VGG19(
+            include_top=False,
+            weights="imagenet",
+            input_tensor=None,
+            input_shape=self.patch_shape,
+            pooling=None,
+            classifier_activation="softmax",
+            )
+
+        self.loaded, self.generator, self.discriminator, self.gan_model = self.load_models()
+        self.network_data = self.load_network_data()
+
+    def load_models(self):
+        try:
+            generator = keras.models.load_model(self.network_location + "generator.h5")
+            discriminator = keras.models.load_model(self.network_location + "discriminator.h5")
+
+            gen_shape = generator.layers[0].input_shape[0][1:]
+            dis_shape = discriminator.layers[0].input_shape[0][1:]
+
+            if not (gen_shape == self.image_shape and dis_shape == self.image_shape):
+                raise ValueError("The loaded dataset and loaded model dimensions do not match")
+
+            gan_model = self.build_gan(generator, discriminator)
+
+            return True, generator, discriminator, gan_model
+
+        except (ImportError, IOError):
+            generator = self.build_generator()
+            discriminator = self.build_discriminator()
+
+            gan_model = self.build_gan(generator, discriminator)
+
+            return False, generator, discriminator, gan_model
+
+    def load_network_data(self):
+
+        if os.path.exists(self.network_data_location):
+            with open(self.network_data_location) as f:
+                network_data = json.load(f)
+        else:
+            network_data = {
+                'name': self.network_name,
+                'image_size': self.image_size,
+                'channels': self.channels,
+                'pairs': int(self.image_pairs),
+                'epochs': 0,
+                'steps': 0
+            }
+
+        return network_data
+
+    def reset_network(self):
+        self.generator = self.build_generator()
+        self.discriminator = self.build_discriminator()
+
+        self.gan_model = self.build_gan(self.generator, self.discriminator)
+
+        self.network_data = {
+            'name': self.network_name,
+            'image_size': self.image_size,
+            'channels': self.channels,
+            'pairs': int(self.image_pairs),
+            'epochs': 0,
+            'steps': 0
+        }
+
+        if os.path.exists(self.summary_location):
+            os.rmdir(self.summary_location)
+
+    def gen_encoder_block(self, input_layer, filters, batch_norm=True):
+        k_init = keras.initializers.RandomNormal(stddev=0.02)
+
+        layer = layers.Conv2D(filters=filters, kernel_size=4, strides=2, use_bias=self.g_bias, padding='same',
+                              kernel_initializer=k_init)(input_layer)
+
+        if batch_norm:
+            layer = layers.BatchNormalization()(layer, training=True)
+
+        layer = layers.LeakyReLU(alpha=0.2)(layer)
+
+        return layer
+
+    def gen_decoder_block(self, input_layer, skip_layer, filters, dropout=True):
+
+        k_init = keras.initializers.RandomNormal(stddev=0.02)
+
+        layer = layers.Conv2DTranspose(filters, kernel_size=4, strides=2, use_bias=self.g_bias, padding='same',
+                                       kernel_initializer=k_init)(input_layer)
+
         layer = layers.BatchNormalization()(layer, training=True)
 
-    layer = layers.LeakyReLU(alpha=0.2)(layer)
+        if dropout:
+            layer = layers.Dropout(0.5)(layer, training=True)
 
-    return layer
+        layer = layers.Concatenate()([layer, skip_layer])
 
+        layer = layers.Activation('relu')(layer)
 
-def gen_decoder_block(input_layer, skip_layer, filters, dropout=True):
+        return layer
 
-    k_init = keras.initializers.RandomNormal(stddev=0.02)
+    def build_generator(self):
+        k_init = keras.initializers.RandomNormal(stddev=0.02)
 
-    layer = layers.Conv2DTranspose(filters, kernel_size=4, strides=2, use_bias=g_bias, padding='same',
-                                   kernel_initializer=k_init)(input_layer)
+        input_layer = layers.Input(shape=self.image_shape)
 
-    layer = layers.BatchNormalization()(layer, training=True)
+        layer_num = int(np.log2(self.image_size)) - 1
 
-    if dropout:
-        layer = layers.Dropout(0.5)(layer, training=True)
+        filter_size = self.image_size // 16
 
-    layer = layers.Concatenate()([layer, skip_layer])
+        # Encoder layers
 
-    layer = layers.Activation('relu')(layer)
+        encoding_layers = []
 
-    return layer
+        down = input_layer
 
+        batch_norm = False
 
-def build_generator():
+        for _ in range(layer_num):
 
-    k_init = keras.initializers.RandomNormal(stddev=0.02)
+            down = self.gen_encoder_block(down, filter_size, batch_norm=batch_norm)
 
-    input_layer = layers.Input(shape=image_shape)
+            if not batch_norm:
+                batch_norm = True
 
-    # Encoder layers
+            if filter_size < self.filter_thresh:
+                filter_size = filter_size * 2
 
-    down_64 = gen_encoder_block(input_layer, 64, batch_norm=False)
+            encoding_layers.append(down)
 
-    down_128 = gen_encoder_block(down_64, 128)
+        # Inner layer
+        inner = layers.Conv2D(filters=self.filter_thresh, kernel_size=4, strides=2, use_bias=self.g_bias,
+                              padding='same', kernel_initializer=k_init)(down)
+        up = layers.Activation('relu')(inner)
 
-    down_256 = gen_encoder_block(down_128, 256)
+        # Decoder layers
 
-    down_512_1 = gen_encoder_block(down_256, 512)
+        encoding_layers.reverse()
 
-    down_512_2 = gen_encoder_block(down_512_1, 512)
+        drop_count = layer_num - int(np.log2(filter_size))
 
-    down_512_3 = gen_encoder_block(down_512_2, 512)
+        dropout = True
 
-    down_512_4 = gen_encoder_block(down_512_3, 512)
+        for down_layer in encoding_layers:
 
-    # Inner layer
-    inner = layers.Conv2D(filters=512, kernel_size=4, strides=2, use_bias=g_bias, padding='same',
-                          kernel_initializer=k_init)(down_512_4)
+            up = self.gen_decoder_block(up, down_layer, down_layer.shape[3], dropout=dropout)
 
-    inner = layers.Activation('relu')(inner)
+            if drop_count == 0:
+                dropout = False
+            else:
+                drop_count -= 1
 
-    # Decoder layers
+        # Output layer
+        outer = layers.Conv2DTranspose(self.channels, kernel_size=4, strides=2, use_bias=self.g_bias, padding='same',
+                                       kernel_initializer=k_init)(up)
+        output = layers.Activation(activation='tanh')(outer)
 
-    up_512_4 = gen_decoder_block(inner, down_512_4, 512)
+        model = Model(input_layer, output)
 
-    up_512_3 = gen_decoder_block(up_512_4, down_512_3, 512)
+        return model
 
-    up_512_2 = gen_decoder_block(up_512_3, down_512_2, 512)
+    def discriminator_block(self, input_layer, filters, strides, k_init, batch_norm=True):
 
-    up_512_1 = gen_decoder_block(up_512_2, down_512_1, 512, dropout=False)
+        layer = layers.Conv2D(filters=filters, kernel_size=4, strides=strides, use_bias=self.d_bias, padding='same',
+                              kernel_initializer=k_init)(input_layer)
 
-    up_256 = gen_decoder_block(up_512_1, down_256, 256, dropout=False)
+        if batch_norm:
+            layer = layers.BatchNormalization()(layer)
 
-    up_128 = gen_decoder_block(up_256, down_128, 128, dropout=False)
+        layer = layers.LeakyReLU(alpha=0.2)(layer)
 
-    up_64 = gen_decoder_block(up_128, down_64, 64, dropout=False)
+        return layer
 
-    # Output layer
-    outer = layers.Conv2DTranspose(channels, kernel_size=4, strides=2, use_bias=g_bias, padding='same',
-                                   kernel_initializer=k_init)(up_64)
-    output = layers.Activation(activation='tanh')(outer)
+    def build_discriminator(self):
 
-    model = Model(input_layer, output)
+        k_init = keras.initializers.RandomNormal(stddev=0.02)
 
-    return model
+        layer_num = int(np.log2(self.image_size)) - 3
 
+        filter_size = self.image_size // 16
 
-def build_discriminator():
+        input_source = layers.Input(shape=self.image_shape)
 
-    k_init = keras.initializers.RandomNormal(stddev=0.02)
+        input_target = layers.Input(shape=self.image_shape)
 
-    input_source = layers.Input(shape=image_shape)
+        input_layer = layers.Concatenate()([input_source, input_target])
 
-    input_target = layers.Input(shape=image_shape)
+        # Down layers
+        batch_norm = False
 
-    input_layer = layers.Concatenate()([input_source, input_target])
+        strides = 2
 
-    # Down layers
+        down = input_layer
 
-    down_64 = layers.Conv2D(filters=64, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
-                            kernel_initializer=k_init)(input_layer)
-    down_64 = layers.LeakyReLU(alpha=0.2)(down_64)
+        for num in range(layer_num):
 
-    down_128 = layers.Conv2D(filters=128, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
-                             kernel_initializer=k_init)(down_64)
-    down_128 = layers.BatchNormalization()(down_128)
-    down_128 = layers.LeakyReLU(alpha=0.2)(down_128)
+            if num == layer_num - 1:
+                strides = 1
 
-    down_256 = layers.Conv2D(filters=256, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
-                             kernel_initializer=k_init)(down_128)
-    down_256 = layers.BatchNormalization()(down_256)
-    down_256 = layers.LeakyReLU(alpha=0.2)(down_256)
+            down = self.discriminator_block(down, filter_size, strides=strides, k_init=k_init, batch_norm=batch_norm)
 
-    down_512 = layers.Conv2D(filters=512, kernel_size=4, strides=2, use_bias=d_bias, padding='same',
-                             kernel_initializer=k_init)(down_256)
-    down_512 = layers.BatchNormalization()(down_512)
-    down_512 = layers.LeakyReLU(alpha=0.2)(down_512)
+            if not batch_norm:
+                batch_norm = True
 
-    down_512_2 = layers.Conv2D(filters=512, kernel_size=4, use_bias=d_bias, padding='same',
-                               kernel_initializer=k_init)(down_512)
-    down_512_2 = layers.BatchNormalization()(down_512_2)
-    down_512_2 = layers.LeakyReLU(alpha=0.2)(down_512_2)
+            if filter_size < self.filter_thresh:
+                filter_size = filter_size * 2
 
-    output = layers.Conv2D(filters=1, kernel_size=4, use_bias=d_bias, padding='same',
-                           kernel_initializer=k_init)(down_512_2)
+        output = layers.Conv2D(filters=1, kernel_size=4, use_bias=self.d_bias, padding='same',
+                               kernel_initializer=k_init)(down)
 
-    output = layers.Activation(activation='sigmoid')(output)
+        output = layers.Activation(activation='sigmoid')(output)
 
-    model = Model([input_source, input_target], output)
+        model = Model([input_source, input_target], output)
 
-    optimizer = keras.optimizers.Adam(lr=d_lr, beta_1=0.5)
+        optimizer = keras.optimizers.Adam(lr=self.d_lr, beta_1=0.5)
 
-    model.compile(loss='binary_crossentropy', optimizer=optimizer, loss_weights=[0.5])
+        model.compile(loss='binary_crossentropy', optimizer=optimizer, loss_weights=[0.5])
 
-    return model
+        return model
 
+    @staticmethod
+    def match_features(image_1, image_2, patch_size):
 
-def match_features(image_1, image_2, patch_size):
+        image_1 = ImageDataSet.translate_image(image_1)
+        image_2 = ImageDataSet.translate_image(image_2)
 
-    image_1 = translate_image(image_1)
-    image_2 = translate_image(image_2)
+        orb = cv2.ORB_create(nfeatures=1000, edgeThreshold=1, nlevels=8, fastThreshold=20, scoreType=cv2.ORB_FAST_SCORE)
 
-    orb = cv2.ORB_create(nfeatures=1000, edgeThreshold=1, nlevels=8, fastThreshold=20, scoreType=cv2.ORB_FAST_SCORE)
+        key_points_1, desc_1 = orb.detectAndCompute(image_1, None)
+        key_points_2, desc_2 = orb.detectAndCompute(image_2, None)
 
-    key_points_1, desc_1 = orb.detectAndCompute(image_1, None)
-    key_points_2, desc_2 = orb.detectAndCompute(image_2, None)
+        desc_1 = np.float32(desc_1)
+        desc_2 = np.float32(desc_2)
 
-    desc_1 = np.float32(desc_1)
-    desc_2 = np.float32(desc_2)
+        index_params = dict(algorithm=1, trees=5)
 
-    index_params = dict(algorithm=1, trees=5)
+        search_params = dict(checks=50)
 
-    search_params = dict(checks=50)
+        flann = cv2.FlannBasedMatcher(index_params, search_params)
+        matches = flann.knnMatch(desc_1, desc_2, k=2)
 
-    flann = cv2.FlannBasedMatcher(index_params, search_params)
-    matches = flann.knnMatch(desc_1, desc_2, k=2)
+        match_points = []
 
-    match_points = []
+        for i, (m, n) in enumerate(matches):
+            if m.distance < 0.7 * n.distance:
+                match_points.append(m)
 
-    for i, (m, n) in enumerate(matches):
-        if m.distance < 0.7 * n.distance:
-            match_points.append(m)
+        random.shuffle(match_points)
 
-    random.shuffle(match_points)
+        for match in match_points:
 
-    for match in match_points:
+            image_1_point = match.queryIdx
+            image_2_point = match.trainIdx
 
-        image_1_point = match.queryIdx
-        image_2_point = match.trainIdx
+            point1_x, point1_y = key_points_1[image_1_point].pt
+            point2_x, point2_y = key_points_2[image_2_point].pt
 
-        point1_x, point1_y = key_points_1[image_1_point].pt
-        point2_x, point2_y = key_points_2[image_2_point].pt
+            point1_x = int(point1_x)
+            point2_x = int(point2_x)
+            point1_y = int(point1_y)
+            point2_y = int(point2_y)
 
-        point1_x = int(point1_x)
-        point2_x = int(point2_x)
-        point1_y = int(point1_y)
-        point2_y = int(point2_y)
+            patch_half = patch_size // 2
+            shape = image_1.shape[0]
 
-        patch_half = patch_size // 2
-        shape = image_1.shape[0]
+            image_1_x1 = int(point1_x - patch_half)
+            image_1_x2 = int(point1_x + patch_half)
+            image_1_y1 = int(point1_y - patch_half)
+            image_1_y2 = int(point1_y + patch_half)
 
-        image_1_x1 = int(point1_x - patch_half)
-        image_1_x2 = int(point1_x + patch_half)
-        image_1_y1 = int(point1_y - patch_half)
-        image_1_y2 = int(point1_y + patch_half)
+            image_2_x1 = int(point2_x - patch_half)
+            image_2_x2 = int(point2_x + patch_half)
+            image_2_y1 = int(point2_y - patch_half)
+            image_2_y2 = int(point2_y + patch_half)
 
-        image_2_x1 = int(point2_x - patch_half)
-        image_2_x2 = int(point2_x + patch_half)
-        image_2_y1 = int(point2_y - patch_half)
-        image_2_y2 = int(point2_y + patch_half)
+            if image_1_x1 < 0 or image_1_y1 < 0 or image_2_x1 < 0 or image_2_y1 < 0:
+                continue
 
-        if image_1_x1 < 0 or image_1_y1 < 0 or image_2_x1 < 0 or image_2_y1 < 0:
-            continue
+            if image_1_x2 > shape or image_1_y2 > shape or image_2_x2 > shape or image_2_y2 > shape:
+                continue
 
-        if image_1_x2 > shape or image_1_y2 > shape or image_2_x2 > shape or image_2_y2 > shape:
-            continue
+            return (image_1_x1, image_1_x2, image_1_y1, image_1_y2), (image_2_x1, image_2_x2, image_2_y1, image_2_y2)
 
-        return (image_1_x1, image_1_x2, image_1_y1, image_1_y2), (image_2_x1, image_2_x2, image_2_y1, image_2_y2)
+        return None
 
-    return None
+    def build_patch_VGG(self, y_true, y_predict):
 
+        total_loss = 0
 
-def build_patch_VGG(y_true, y_predict):
+        target_1 = y_true[:, :, 0:self.image_size, :]
+        target_2 = y_true[:, :, self.image_size: 2 * self.image_size, :]
 
-    total_loss = 0
+        predict_1 = y_predict[:, :, 0:self.image_size, :]
+        predict_2 = y_predict[:, :, self.image_size: 2 * self.image_size, :]
 
-    target_1 = y_true[:, :, 0:image_size, :]
-    target_2 = y_true[:, :, image_size: 2 * image_size, :]
+        coordinates = self.match_features(keras_backend.eval(target_1), keras_backend.eval(target_2),
+                                          self.feature_patch_size)
 
-    predict_1 = y_predict[:, :, 0:image_size, :]
-    predict_2 = y_predict[:, :, image_size: 2 * image_size, :]
+        if coordinates is None:
+            return keras_backend.mean(keras.metrics.mean_absolute_error(y_true, y_predict))
 
-    coordinates = match_features(keras_backend.eval(target_1), keras_backend.eval(target_2), feature_patch_size)
+        (x1, x2, y1, y2), (x3, x4, y3, y4) = coordinates
 
-    if coordinates is None:
-        return keras_backend.mean(keras.metrics.mean_absolute_error(y_true, y_predict))
+        real_1 = target_1[:, x1:x2, y1:y2, :]
+        fake_1 = predict_1[:, x1:x2, y1:y2, :]
 
-    (x1, x2, y1, y2), (x3, x4, y3, y4) = coordinates
+        real_2 = target_2[:, x3:x4, y3:y4, :]
+        fake_2 = predict_2[:, x3:x4, y3:y4, :]
 
-    real_1 = target_1[:, x1:x2, y1:y2, :]
-    fake_1 = predict_1[:, x1:x2, y1:y2, :]
+        for layer in self.VGG_net.layers:
+            real_1 = layer(real_1)
+            fake_1 = layer(fake_1)
+            total_loss += keras_backend.mean(keras.metrics.mean_absolute_error(real_1, fake_1))
 
-    real_2 = target_2[:, x3:x4, y3:y4, :]
-    fake_2 = predict_2[:, x3:x4, y3:y4, :]
+            real_2 = layer(real_2)
+            fake_2 = layer(fake_2)
+            total_loss += keras_backend.mean(keras.metrics.mean_absolute_error(real_2, fake_2))
 
-    for layer in VGG_net.layers:
-        real_1 = layer(real_1)
-        fake_1 = layer(fake_1)
-        total_loss += keras_backend.mean(keras.metrics.mean_absolute_error(real_1, fake_1))
+        return total_loss/2
 
-        real_2 = layer(real_2)
-        fake_2 = layer(fake_2)
-        total_loss += keras_backend.mean(keras.metrics.mean_absolute_error(real_2, fake_2))
+    def location_loss(self, locations, y_predict):
 
-    return total_loss/2
+        locations = keras_backend.eval(locations)
 
+        predict_1 = y_predict[:, :, 0:self.image_size, :]
+        predict_2 = y_predict[:, :, self.image_size: 2 * self.image_size, :]
 
-def build_gan(gen_model, dis_model):
+        predict_1 = keras_backend.eval(predict_1)
+        predict_2 = keras_backend.eval(predict_2)
 
-    for layer in dis_model.layers:
-        if not isinstance(layer, layers.BatchNormalization):
-            layer.trainable = False
+        predict_1 = np.squeeze(predict_1, axis=0)
+        predict_2 = np.squeeze(predict_2, axis=0)
 
-    input_layer = layers.Input(shape=image_shape)
+        predict_1 = np.uint8(predict_1)
+        predict_2 = np.uint8(predict_2)
 
-    gen_out = gen_model(input_layer)
+        poses = get_pose(predict_1, predict_2, self.disparity_map_matrix)
 
-    dis_out = dis_model([input_layer, gen_out])
+        num_obj_error = np.abs((len(poses) - len(locations)))
 
-    model = Model(input_layer, [dis_out, gen_out, gen_out])
+        if len(poses) > 0:
+            location_set = []
 
-    optimizer = keras.optimizers.Adam(lr=g_lr, beta_1=0.5)
+            for pose in poses:
+                location_set.append(pose['location'])
 
-    model.compile(loss=['binary_crossentropy', 'mae', build_patch_VGG], optimizer=optimizer, loss_weights=[1, 80, 20],
-                  run_eagerly=True)
+            location_error = calculate_error(np.asarray(locations), location_set)
 
-    return model
+            total_error = num_obj_error * location_error
+        else:
+            total_error = 0
 
+        return total_error
 
-def generate_output(gen_model, model_input, patch_size):
+    def build_gan(self, gen_model, dis_model):
 
-    output = gen_model.predict(model_input)
-    labels = tf.zeros((len(output), patch_size, patch_size*image_pairs, 1))
+        for layer in dis_model.layers:
+            if not isinstance(layer, layers.BatchNormalization):
+                layer.trainable = False
 
-    return output, labels
+        input_layer = layers.Input(shape=self.image_shape)
 
+        gen_out = gen_model(input_layer)
 
-def end_of_epoch(gen_model, data_set, patch_size):
+        dis_out = dis_model([input_layer, gen_out])
 
-    data_len = int(data_set.__len__())
+        model_output = [dis_out, gen_out]
+        loss = [self.discriminator_loss, self.generator_loss]
+        loss_weights = [self.discriminator_loss_weight, self.generator_loss_weight]
 
-    specular, diffuse = data_set.__getitem__(random.randint(0, data_len))
+        if self.use_vgg_loss:
+            loss.append(self.build_patch_VGG)
+            loss_weights.append(self.vgg_loss_weight)
+            model_output.append(gen_out)
 
-    generate_output(gen_model, specular, patch_size)
+        if self.use_location_loss:
+            loss.append(self.location_loss)
+            loss_weights.append(self.location_loss_weight)
+            model_output.append(gen_out)
 
+        model = Model(input_layer, model_output)
 
-def generate_test_sample(samples=1, pair=True):
+        optimizer = keras.optimizers.Adam(lr=self.g_lr, beta_1=0.5)
 
-    image_data_set = ImageDataSet(batch_size=samples)
+        model.compile(loss=loss, optimizer=optimizer, loss_weights=loss_weights, run_eagerly=True)
 
-    specular_image, diffuse_image = image_data_set.__getitem__(0)
+        return model
 
-    specular_image = np.asarray(specular_image)
+    def generate_output(self, gen_model, model_input, patch_size):
 
-    if pair:
-        diffuse_image = np.asarray(diffuse_image)
-        return specular_image, diffuse_image
-    else:
-        return specular_image
+        output = gen_model.predict(model_input)
+        labels = tf.zeros((len(output), patch_size, patch_size*self.image_pairs, 1))
 
+        return output, labels
 
-def training_summary(gen_model, summary_folder, epoch, step=0, samples=1):
+    def end_of_epoch(self, gen_model, data_set, patch_size):
 
-    specular_real, diffuse_real = generate_test_sample(samples, pair=True)
+        data_len = int(data_set.__len__())
 
-    gen_out, _ = generate_output(gen_model, specular_real, 1)
+        specular, diffuse = data_set.__getitem__(random.randint(0, data_len))
 
-    specular_real = (specular_real + 1) / 2.0
-    diffuse_real = (diffuse_real + 1) / 2.0
-    gen_out = (gen_out + 1) / 2.0
+        self.generate_output(gen_model, specular, patch_size)
 
-    for i in range(samples):
-        plt.subplot(3, samples, 1 + i)
-        plt.axis('off')
-        plt.imshow(specular_real[i])
+    def generate_test_sample(self,  pair=True):
 
-    for i in range(samples):
-        plt.subplot(3, samples, 1 + samples + i)
-        plt.axis('off')
-        plt.imshow(gen_out[i])
+        specular_image, target = self.image_dataset.__getitem__(0)
 
-    for i in range(samples):
-        plt.subplot(3, samples, 1 + samples * 2 + i)
-        plt.axis('off')
-        plt.imshow(diffuse_real[i])
+        diffuse_image, _ = target
 
-    filename = '/plot_%04d_%05d.png' % ((epoch + 1), step)
-    filename = summary_folder + filename
-    plt.savefig(filename)
-    plt.close()
-    print('>Saved summary to: %s ' % filename)
+        specular_image = np.asarray(specular_image)
 
+        if pair:
+            diffuse_image = np.asarray(diffuse_image)
+            return specular_image, diffuse_image
+        else:
+            return specular_image
 
-def train_gan(gen_model, dis_model, gan_model, data_set, epochs=100, cont_train=False):
+    def training_summary(self, gen_model, summary_folder, epoch, step=0, samples=1):
 
-    try:
-        file_name = max(glob.iglob('Models/Generator/*.h5'), key=os.path.getctime)
-        file_name = os.path.basename(file_name)
-    except ValueError:
-        file_name = '0.h5'
+        specular_real, diffuse_real = self.generate_test_sample(pair=True)
 
-    if cont_train:
-        gen_model = keras.models.load_model('Models/Generator/' + file_name)
-        dis_model = keras.models.load_model('Models/Discriminator/' + file_name)
-    else:
-        file_name = os.path.splitext(file_name)[0]
-        file_name = str(int(file_name) + 1)
-        file_name = file_name + '.h5'
+        gen_out, _ = self.generate_output(gen_model, specular_real, 1)
 
-    summary_folder = 'Summary/' + os.path.splitext(file_name)[0]
+        specular_real = (specular_real + 1) / 2.0
+        diffuse_real = (diffuse_real + 1) / 2.0
+        gen_out = (gen_out + 1) / 2.0
 
-    if not os.path.exists(summary_folder):
-        os.makedirs(summary_folder)
+        for i in range(samples):
+            plt.subplot(3, samples, 1 + i)
+            plt.axis('off')
+            plt.imshow(specular_real[i])
 
-    data_len = int(data_set.__len__())
+        for i in range(samples):
+            plt.subplot(3, samples, 1 + samples + i)
+            plt.axis('off')
+            plt.imshow(gen_out[i])
 
-    patch_size = dis_model.output_shape[1]
+        for i in range(samples):
+            plt.subplot(3, samples, 1 + samples * 2 + i)
+            plt.axis('off')
+            plt.imshow(diffuse_real[i])
 
-    for epoch in range(epochs):
-        for idx in range(data_len):
+        filename = '/plot_%04d_%05d.png' % ((epoch + 1), step)
+        filename = summary_folder + filename
+        plt.savefig(filename)
+        plt.close()
+        print('>Saved summary to: %s ' % filename)
 
-            specular_real, diffuse_real = data_set.__getitem__(idx)
+    def train_gan(self, toggle_vgg=-1, toggle_location_loss=-1, epochs=100):
 
-            labels_real = tf.ones((batch_size, patch_size, patch_size*image_pairs, 1))
+        if not os.path.exists(self.summary_location):
+            os.makedirs(self.summary_location)
 
-            gen_out, gen_label = generate_output(gen_model, specular_real, patch_size)
+        data_len = int(self.image_dataset.__len__())
 
-            dis_loss_real = dis_model.train_on_batch([specular_real, diffuse_real], labels_real)
+        patch_size = self.discriminator.output_shape[1]
 
-            dis_loss_gen = dis_model.train_on_batch([specular_real, gen_out], gen_label)
+        total_epochs = int(self.network_data['epochs'])
 
-            gan_loss, _, _, _ = gan_model.train_on_batch(specular_real, [labels_real, diffuse_real, diffuse_real])
+        steps = int(self.network_data['steps'])
 
-            print('Epoch: %d  Step: %d Discriminator loss (target): [%.3f] Discriminator loss (Specular): [%.3f] '
-                  'Generator loss: [%.3f]' % (epoch+1, idx + 1, dis_loss_real, dis_loss_gen, gan_loss))
+        for epoch in range(total_epochs, total_epochs + epochs):
 
-            if idx % 100 == 0:
-                training_summary(gen_model, summary_folder, epoch, idx, batch_size)
-                gen_model.save('Models/Generator/' + file_name)
-                dis_model.save('Models/Discriminator/' + file_name)
+            if epoch - total_epochs == toggle_vgg:
+                self.use_vgg_loss = not self.use_vgg_loss
+                self.gan_model = self.build_gan(self.generator, self.discriminator)
 
-        data_set.on_epoch_end()
+            if epoch - total_epochs == toggle_location_loss:
+                self.use_location_loss = not self.use_location_loss
+                self.gan_model = self.build_gan(self.generator, self.discriminator)
 
-        training_summary(gen_model, summary_folder, epoch, batch_size)
-        gen_model.save('Models/Generator/' + file_name)
-        dis_model.save('Models/Discriminator/' + file_name)
+            while steps < data_len:
 
+                specular_real, target = self.image_dataset.__getitem__(steps)
 
-def start_training(cont=False):
-    generator = build_generator()
+                diffuse_real, locations = target
 
-    discriminator = build_discriminator()
+                labels_real = tf.ones((self.batch_size, patch_size, patch_size*self.image_pairs, 1))
 
-    gan = build_gan(generator, discriminator)
+                gen_out, gen_label = self.generate_output(self.generator, specular_real, patch_size)
 
-    data_set = ImageDataSet(batch_size)
+                dis_loss_real = self.discriminator.train_on_batch([specular_real, diffuse_real], labels_real)
 
-    train_gan(generator, discriminator, gan, data_set, cont_train=cont)
+                dis_loss_gen = self.discriminator.train_on_batch([specular_real, gen_out], gen_label)
 
+                output_target = [labels_real, diffuse_real]
 
-def test_generator(model_name=None):
+                if self.use_vgg_loss:
+                    output_target.append(diffuse_real)
 
-    if model_name is None:
-        file_name = max(glob.iglob('Models/Generator/*.h5'), key=os.path.getctime)
-    else:
-        file_name = 'Models/Generator/' + model_name + '.h5'
+                if self.use_location_loss:
+                    output_target.append(locations)
 
-    generator = keras.models.load_model(file_name)
+                gan_losses = self.gan_model.train_on_batch(specular_real, output_target)
 
-    sample = generate_test_sample(1, pair=False)
+                gan_loss = gan_losses[0]
 
-    output = generator.predict(sample)
+                print('Epoch: %d  Step: %d Discriminator loss (target): [%.3f] Discriminator loss (Specular): [%.3f] '
+                      'Generator loss: [%.3f]' % (epoch+1, steps + 1, dis_loss_real, dis_loss_gen, gan_loss))
 
-    output = translate_image(output)
+                self.network_data['epochs'] = epoch
+                self.network_data['steps'] = steps
 
-    cv2.imshow("Output", output)
-    cv2.waitKey(0) & 0xFF
+                if steps % 20 == 0:
+                    with open(self.network_data_location, 'w') as f:
+                        json.dump(self.network_data, f)
+
+                if steps % 100 == 0:
+                    self.training_summary(self.generator, self.summary_location, epoch, steps, self.batch_size)
+                    self.generator.save(self.network_location + 'generator.h5')
+                    self.discriminator.save(self.network_location + 'discriminator.h5')
+
+                steps += 1
+
+            self.image_dataset.on_epoch_end()
+
+            self.training_summary(self.generator, self.summary_location, epoch, self.batch_size)
+            self.generator.save(self.network_location + 'generator.h5')
+            self.discriminator.save(self.network_location + 'discriminator.h5')
+
+            self.network_data['epochs'] = epoch
+            self.network_data['steps'] = steps
+            with open(self.network_data_location, 'w') as f:
+                json.dump(self.network_data, f)
+
+            steps = 0
+
+    def get_output(self, views):
+
+        if not len(views) == self.image_pairs:
+            raise ValueError(f"Expected {self.image_pairs} images. Received {len(views)} images instead.")
+
+        input_images = []
+
+        for view in views:
+            hsv_image = self.image_dataset.convert_image_to_hsv(view, specular=True, gray=False)
+            input_images.append(self.image_dataset.prepare_input(hsv_image, expand=True))
+
+        input_image = np.concatenate(input_images, axis=2)
+
+        generated_image = self.generator.predict(input_image)
+        translated_image = ImageDataSet.translate_image(generated_image)
+
+        div_point = int(translated_image.shape[1] / self.image_pairs)
+
+        output_images = []
+
+        for x in range(self.image_pairs):
+            point = x * div_point
+            output_images.append(np.uint8(translated_image[:, point:point+div_point, :]))
+
+        return output_images
+
+    def test_generator(self):
+
+        images, _ = self.image_dataset.get_test_pair()
+
+        image_1, image_2 = images
+
+        return self.get_output([image_1, image_2])
