@@ -1,6 +1,6 @@
 # In order to run this run the following command in the terminal
-# blender --background --python synthetic_gen.py --render-frame 1 -- <resolution_percentage> <num_samples> <num_data>
-# Example: blender --background --python synthetic_gen.py -- 50 120 50
+# blender --background --python synthetic_gen.py -- <dataset_name> <resolution_percentage> <num_samples> <num_data>
+# Example: blender --background --python synthetic_gen.py -- test 50 120 50
 
 import bpy
 import sys
@@ -17,10 +17,12 @@ import random
 file_path = os.path.abspath(__file__)
 main_directory = os.path.dirname(file_path)
 
+dataset_name = sys.argv[sys.argv.index('--') + 1]
+
 main_directory = main_directory.replace(os.sep, '/')
 
 # The path relative to system must be entered here. "/Output" means C:/Output/ in a Windows system
-RENDER_DIR = main_directory + "/Output"
+RENDER_DIR = main_directory + "/Output/" + dataset_name
 
 SPECULAR_DIR = RENDER_DIR + "/Specular/"
 
@@ -376,7 +378,7 @@ def generate(resolution, sample_count, data_count):
 
 
 # Args
-resolution_percentage = int(sys.argv[sys.argv.index('--') + 1])
-num_samples = int(sys.argv[sys.argv.index('--') + 2])
-num_data = int(sys.argv[sys.argv.index('--') + 3])
+resolution_percentage = int(sys.argv[sys.argv.index('--') + 2])
+num_samples = int(sys.argv[sys.argv.index('--') + 3])
+num_data = int(sys.argv[sys.argv.index('--') + 4])
 generate(resolution_percentage, num_samples, num_data)
