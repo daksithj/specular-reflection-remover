@@ -6,12 +6,12 @@ import math
 from random import randint
 
 from PoseEstimation.object_detection import get_object_masks
-from PoseEstimation.evaluate_pose import get_closest_location, read_actual_locations
+from PoseEstimation.evaluate_pose import get_closest_location
 
 
 def downsample_image(image, reduce_factor):
     for i in range(0, reduce_factor):
-        # Check if image is color or grayscale
+
         if len(image.shape) > 2:
             row, col = image.shape[:2]
         else:
@@ -328,9 +328,7 @@ def draw_axis(img, object_point, centre, axis_point_1, lambda_map, disparity_map
     cv2.circle(img, (centre_x, centre_y), 4, colour, -1)
 
 
-def draw_real_locations(img, object_point, centre, lambda_map, disparity_map_matrix, data_num):
-
-    real_locations = read_actual_locations('Dataset/Test', data_num)
+def draw_real_locations(img, object_point, centre, lambda_map, disparity_map_matrix, real_locations):
 
     closest = get_closest_location(real_locations, centre)
 
@@ -354,7 +352,7 @@ def show_object_masks(object_masks):
         cv2.waitKey(0)
 
 
-def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=False, draw_real=None):
+def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=False, real_locations=None):
 
     object_masks = get_object_masks(img_1, k_1=15, k_2=3)
     disparity_map = get_disparity_map(img_1, img_2)
@@ -378,8 +376,8 @@ def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=Fa
         if draw_line:
             draw_axis(img_1, item, centre, axis_point_1, lambda_map, disparity_map_matrix, colour=colour)
 
-        if draw_real is not None:
-            draw_real_locations(img_1, item, centre, lambda_map, disparity_map_matrix, draw_real)
+        if real_locations is not None:
+            draw_real_locations(img_1, item, centre, lambda_map, disparity_map_matrix, real_locations)
 
     if draw_points or draw_line:
         cv2.imshow('Window', img_1)

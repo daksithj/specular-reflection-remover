@@ -1,7 +1,6 @@
 .idea
 __pycache__
 DatasetCreator/Output/*
-DeepLearning/Dataset/*
-DeepLearning/Summary/*
+DeepLearning/Networks/*
 DeepLearning/Models/Discriminator/*
 DeepLearning/Models/Generator/*
