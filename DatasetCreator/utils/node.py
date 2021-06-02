@@ -1,7 +1,6 @@
 import bpy
 import sys
 import math
-from typing import Iterable
 
 
 def clean_nodes(nodes: bpy.types.Nodes) -> None:

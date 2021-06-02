@@ -3,10 +3,6 @@ import os
 import random
 from typing import Tuple, Optional
 
-file_path = os.path.abspath(__file__)
-util_directory = os.path.dirname(file_path)
-main_directory = os.path.dirname(util_directory)
-
 
 def create_plane(location: Tuple[float, float, float] = (0.0, 0.0, 0.0),
                  rotation: Tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -22,11 +18,10 @@ def create_plane(location: Tuple[float, float, float] = (0.0, 0.0, 0.0),
     return current_object
 
 
-def create_item(objects, location, num):
+def create_item(objects, location, num, models_directory):
 
-    directory = main_directory + "/assets/models"
-    file_name = random.choice(os.listdir(directory))
-    file = directory + '/' + file_name
+    file_name = random.choice(os.listdir(models_directory))
+    file = models_directory + '/' + file_name
     bpy.ops.import_mesh.ply(filepath=file)
 
     current_object = bpy.context.object
@@ -45,7 +40,7 @@ def create_item(objects, location, num):
     return objects
 
 
-def generate_items():
+def generate_items(models_directory):
     og_loc_x = -5.0
     og_loc_y = -2.5
     og_loc_z = 1.5
@@ -65,6 +60,6 @@ def generate_items():
 
     num_ob = 6
     for i in range(num_ob):
-        objects = create_item(objects, location, i)
+        objects = create_item(objects, location, i, models_directory)
 
     return objects

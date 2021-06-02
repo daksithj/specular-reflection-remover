@@ -1,6 +1,9 @@
 # In order to run this run the following command in the terminal
 # blender --background --python synthetic_gen.py -- <dataset_name> <resolution_percentage> <num_samples> <num_data>
-# Example: blender --background --python synthetic_gen.py -- test 50 120 50
+# Example: blender --background --python synthetic_gen.py --name models --res 50 --samp 120 --num 2
+# Example: blender --background --python synthetic_gen.py --name models --res 50 --samp 120 --num 2
+# --background 0.1 0.4 0.3 0.5 --object 0.5 0.1 0.1 1.0
+# Black background color: 0.03, 0.03, 0.03, 0.03
 
 import bpy
 import sys
@@ -8,21 +11,63 @@ from mathutils import Matrix
 import os
 import pickle as pkl
 import numpy as np
-
+import argparse
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 import random
 
+parser = argparse.ArgumentParser()
+
+parser.add_argument('--name', '-n', help='The name of the dataset', type=str, default='Test')
+parser.add_argument('--res', '-r', help='The resolution percentage', type=int, default=50)
+parser.add_argument('--samp', '-s', help='The number of samples', type=int, default=120)
+parser.add_argument('--num', '-d', help='The number data points', type=int, default=50)
+parser.add_argument('--background', '-b', default=[], nargs='*', action='store')
+parser.add_argument('--object', '-o', default=[], nargs='*', action='store')
+
+args = parser.parse_known_args(sys.argv)[0]
+
+dataset_name = args.name
+resolution_percentage = args.res
+num_samples = args.samp
+num_data = args.num
+background_arg = args.background
+object_arg = args.object
+
+if len(background_arg) > 0 and not len(background_arg) == 4:
+    raise ValueError(f"Expected 4 values between (0.0 - 1.0). Received {len(background_arg)} instead")
+
+background_color = []
+
+for arg in background_arg:
+    value = float(arg)
+    if value < 0 or value > 1:
+        raise ValueError("Invalid value for background colour. Must be between 0.0 and 1.0.")
+    else:
+        background_color.append(value)
+
+object_color = []
+
+if len(object_arg) > 0 and not len(object_arg) == 4:
+    raise ValueError(f"Expected 4 values between (0.0 - 1.0). Received {len(object_arg)} instead")
+
+for arg in object_arg:
+    value = float(arg)
+    if value < 0 or value > 1:
+        raise ValueError("Invalid value for object colour. Must be between 0.0 and 1.0.")
+    else:
+        object_color.append(value)
+
 file_path = os.path.abspath(__file__)
 main_directory = os.path.dirname(file_path)
-
-dataset_name = sys.argv[sys.argv.index('--') + 1]
 
 main_directory = main_directory.replace(os.sep, '/')
 
 # The path relative to system must be entered here. "/Output" means C:/Output/ in a Windows system
 RENDER_DIR = main_directory + "/Output/" + dataset_name
+
+MODELS_DIR = main_directory + "/assets/" + dataset_name
 
 SPECULAR_DIR = RENDER_DIR + "/Specular/"
 
@@ -73,9 +118,14 @@ def set_principled_node_as_diffuse(principled_node: bpy.types.Node) -> None:
 
 def set_principled_node_as_plane(principled_node: bpy.types.Node) -> None:
 
+    if len(background_color) == 0:
+        color = (random.uniform(0.0, 0.3), random.uniform(0.0, 0.3), random.uniform(0.0, 0.3), random.uniform(0.0, 1.0))
+    else:
+        color = tuple(background_color)
+
     utils.set_principled_node(
         principled_node=principled_node,
-        base_color=(0.03, 0.03, 0.03, 0.03),
+        base_color=color,
         metallic=0.0,
         specular=0.1,
         roughness=0.9,
@@ -83,10 +133,15 @@ def set_principled_node_as_plane(principled_node: bpy.types.Node) -> None:
 
 
 def set_principled_node_as_specular(principled_node: bpy.types.Node) -> None:
+
+    if len(object_color) == 0:
+        color = (random.uniform(0.0, 1.0), random.uniform(0.0, 1.0), random.uniform(0.0, 1.0), random.uniform(0.0, 1.0))
+    else:
+        color = tuple(object_color)
+
     utils.set_principled_node(
         principled_node=principled_node,
-        base_color=(random.uniform(0.0, 1.0), random.uniform(0.0, 1.0), random.uniform(0.0, 1.0),
-                    random.uniform(0.0, 1.0)),
+        base_color=color,
         metallic=0.9,
         specular=0.5,
         roughness=0.2,
@@ -95,7 +150,7 @@ def set_principled_node_as_specular(principled_node: bpy.types.Node) -> None:
 
 
 def set_scene_objects() -> bpy.types.Object:
-    objects = utils.generate_items()
+    objects = utils.generate_items(MODELS_DIR)
     principles = []
     i = 0
     for item in objects:
@@ -376,9 +431,8 @@ def generate(resolution, sample_count, data_count):
         pkl.dump(item_locations, loc_file)
         loc_file.close()
 
+        sys.stdout.write(f'Generated output_{render_num + 1}_\n')
+        sys.stdout.flush()
 
-# Args
-resolution_percentage = int(sys.argv[sys.argv.index('--') + 2])
-num_samples = int(sys.argv[sys.argv.index('--') + 3])
-num_data = int(sys.argv[sys.argv.index('--') + 4])
+
 generate(resolution_percentage, num_samples, num_data)
