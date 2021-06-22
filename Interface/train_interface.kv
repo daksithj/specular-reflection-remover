@@ -1,9 +1,6 @@
 #: import utils kivy.utils
 #: import Factory kivy.factory.Factory
 
-WindowManager:
-    ModelWindow:
-
 <ModelWindow>
     name:"model_window"
     canvas.before:
@@ -40,7 +37,7 @@ WindowManager:
             font_size: 20
             size_hint: 0.4, 0.075
             pos_hint: {"center_x":0.50, "center_y": 0.38}
-            on_release: root.on_generate()
+            on_release: root.on_new_model()
 
         Button:
             text: "Train Model"
@@ -56,3 +53,244 @@ WindowManager:
             pos_hint: {"center_x":0.50, "center_y": 0.18}
             on_release: root.on_generate()
 
+
+<NewModelWindow>
+    id: new_model_window
+    name:"new_model_window"
+    canvas.before:
+        Color:
+            rgba: utils.get_color_from_hex('#1c333c')
+        Rectangle:
+            size: self.size
+            pos: self.pos
+
+    FloatLayout:
+        size: root.width, root.height
+        spacing: 10
+        padding: 20
+
+        Label:
+            text: "Creating new model"
+            font_size: 24
+            pos_hint: {"center_x":0.5, "center_y": 0.85}
+
+        Label:
+            text: "Select the generated dataset"
+            font_size: 16
+            bold: False
+            pos_hint: {"x":-0.25, "center_y": 0.65}
+
+        Spinner:
+            id: dataset_chooser
+            text: 'Choose a dataset'
+            size_hint: None, None
+            pos_hint: {"center_x":0.5, "center_y": 0.57}
+            size: 600, 30
+            sync_height: True
+            on_press: root.list_data_sets()
+            on_text: root.validate()
+
+        Label:
+            text: "Enter dataset name:"
+            font_size: 16
+            bold: False
+            pos_hint: {"x":-0.29, "center_y": 0.45}
+
+        TextInput:
+            id: new_model_name
+            size_hint: (0.200, 0.045)
+            multiline: False
+            foreground_color: (1, 1, 1, 1)
+            background_normal: ''
+            background_color: utils.get_color_from_hex('#60686e')
+            pos_hint: {"right":0.52, "center_y": 0.45}
+            halign: 'center'
+            font_size: 14
+            on_text: root.validate()
+
+        Button:
+            id: new_model_button
+            text: 'Create model'
+            disabled: True
+            on_release:root.on_create_model()
+            size_hint: (0.2, 0.06)
+            pos_hint: {"right":0.87,"y": 0.35}
+
+        Button:
+            text: 'Go back'
+            on_release:root.on_back()
+            size_hint: (0.08, 0.06)
+            pos_hint: {"right":0.17,"center_y": 0.85}
+
+
+<TrainModelWindow>
+    id: train_model_window
+    name:"train_model_window"
+    canvas.before:
+        Color:
+            rgba: utils.get_color_from_hex('#1c333c')
+        Rectangle:
+            size: self.size
+            pos: self.pos
+
+    FloatLayout:
+        size: root.width, root.height
+        spacing: 10
+        padding: 20
+
+        Label:
+            text: "Train model"
+            font_size: 24
+            pos_hint: {"center_x":0.5, "center_y": 0.85}
+
+        Label:
+            text: "Select the model to train"
+            font_size: 16
+            bold: False
+            pos_hint: {"x":-0.25, "center_y": 0.75}
+
+        Spinner:
+            id: train_model_chooser
+            text: 'Choose a model'
+            size_hint: None, None
+            pos_hint: {"center_x":0.5, "center_y": 0.70}
+            size: 600, 30
+            sync_height: True
+            on_press: root.list_models()
+            on_text: root.on_selection()
+
+        GridLayout:
+            cols: 2
+            size_hint: (0.300, 0.40)
+            pos_hint: {"right":0.42, "center_y": 0.45}
+            spacing: 10
+            padding: 20
+
+            Label:
+                text: "Dataset Name:"
+                font_size: 16
+
+            Label:
+                id: train_dataset_name
+                text: "-"
+                font_size: 14
+
+            Label:
+                text: "Image size:"
+                font_size: 16
+
+            Label:
+                id: train_image_size
+                text: "-"
+                font_size: 14
+
+            Label:
+                text: "Channels:"
+                font_size: 16
+
+            Label:
+                id: train_channels
+                text: "-"
+                font_size: 14
+
+            Label:
+                text: "Pairs:"
+                font_size: 16
+
+            Label:
+                id: train_pairs
+                text: "-"
+                font_size: 14
+
+            Label:
+                text: "Trained Epochs:"
+                font_size: 16
+
+            Label:
+                id: train_model_epochs
+                text: "-"
+                font_size: 14
+
+            Label:
+                text: "Trained Steps:"
+                font_size: 16
+
+            Label:
+                id: train_steps
+                text: "-"
+                font_size: 14
+
+        Label:
+            text: "No. of Epochs:"
+            font_size: 16
+            bold: False
+            pos_hint: {"center_x":0.53, "center_y": 0.60}
+
+        TextInput:
+            id: train_epochs
+            text: "100"
+            size_hint: (0.070, 0.045)
+            multiline: False
+            foreground_color: (1, 1, 1, 1)
+            background_normal: ''
+            background_color: utils.get_color_from_hex('#60686e')
+            pos_hint: {"center_x":0.80, "center_y": 0.60}
+            halign: 'center'
+            font_size: 14
+            #on_text: root.validate()
+
+        Label:
+            text: "Use VGG Loss:"
+            font_size: 16
+            bold: False
+            pos_hint: {"center_x":0.53, "center_y": 0.50}
+
+        Switch:
+            id: use_vgg_switch
+            active: True
+            disabled: True
+            font_size: 10
+            size_hint: (0.22, 0.02)
+            pos_hint: {"center_x":0.68, "center_y":0.50}
+            on_active: root.frequency_toggle(*args)
+
+        TextInput:
+            id: use_vgg_epoch
+            text: "20"
+            size_hint: (0.070, 0.045)
+            multiline: False
+            foreground_color: (1, 1, 1, 1)
+            background_normal: ''
+            background_color: utils.get_color_from_hex('#60686e')
+            pos_hint: {"center_x":0.80, "center_y": 0.50}
+            halign: 'center'
+            font_size: 14
+            #on_text: root.validate()
+
+        Label:
+            text: "Use Pose Loss:"
+            font_size: 16
+            bold: False
+            pos_hint: {"center_x":0.53, "center_y": 0.40}
+
+        Switch:
+            id: use_pose_switch
+            active: True
+            disabled: True
+            font_size: 10
+            size_hint: (0.22, 0.02)
+            pos_hint: {"center_x":0.68, "center_y":0.40}
+            on_active: root.frequency_toggle(*args)
+
+        TextInput:
+            id: use_pose_epoch
+            text: "80"
+            size_hint: (0.070, 0.045)
+            multiline: False
+            foreground_color: (1, 1, 1, 1)
+            background_normal: ''
+            background_color: utils.get_color_from_hex('#60686e')
+            pos_hint: {"center_x":0.80, "center_y": 0.40}
+            halign: 'center'
+            font_size: 14
+            #on_text: root.validate()

@@ -3,6 +3,7 @@
 
 WindowManager:
     StartWindow:
+    NewModelWindow:
 
 <StartWindow>
     name:"start_window"
@@ -55,3 +56,24 @@ WindowManager:
             size_hint: 0.4, 0.075
             pos_hint: {"center_x":0.50, "center_y": 0.18}
             on_release: root.on_generate()
+
+<CreateSuccessPopup@Popup>
+    title:"Success"
+    auto_dismiss: True
+    size_hint: (0.4, 0.3)
+    pos_hint: {'x': 0.32, "top": 0.6}
+
+    BoxLayout:
+        orientation: "vertical"
+        size: root.width, root.height
+
+        Label:
+            text: "Successfully created a new model"
+            font_size: 16
+
+        FloatLayout:
+            Button:
+                text: 'OK'
+                size_hint: (0.2, 0.5)
+                pos_hint: {"right":0.6,"y": 0.20}
+                on_release: root.dismiss()

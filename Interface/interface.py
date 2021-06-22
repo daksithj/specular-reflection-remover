@@ -2,7 +2,7 @@ from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen, RiseInTransition, ScreenManagerException
 from Interface.generate_interface import GenerateWindow
-from Interface.train_interface import ModelWindow
+from Interface.train_interface import ModelWindow, TrainModelWindow
 
 
 class StartWindow(Screen):
@@ -40,7 +40,9 @@ class WindowManager(ScreenManager):
 
         self.transition = RiseInTransition()
         self.add_widget(StartWindow())
-        self.current = 'start_window'
+        Builder.load_file('Interface/train_interface.kv')
+        self.add_widget(TrainModelWindow())
+        self.current = 'train_model_window'
 
 
 class SpecToPoseApp(App):
