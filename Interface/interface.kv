@@ -1,0 +1,510 @@
+#: import utils kivy.utils
+#: import Factory kivy.factory.Factory
+
+WindowManager:
+    StartWindow:
+    GenerateWindow:
+    GenerateSettingsWindow:
+    GeneratePendingWindow:
+
+<StartWindow>
+    name:"start_window"
+    canvas.before:
+        Color:
+            rgba: utils.get_color_from_hex('#1c333c')
+        Rectangle:
+            size: self.size
+            pos: self.pos
+
+    FloatLayout:
+        size: root.width, root.height
+        spacing: 10
+        padding: 20
+
+        Image:
+            source: 'logo.png'
+            size_hint: 0.25, 0.25
+            pos_hint: {"center_x":0.5, "center_y": 0.80}
+
+        Label:
+            text: "Welcome to SpecToPose"
+            font_size: 32
+            bold: True
+            pos_hint: {"center_x":0.5, "center_y": 0.60}
+
+        Label:
+            text: "Please select mode"
+            font_size: 20
+            valign: 'top'
+            pos_hint: {"center_x":0.5, "center_y": 0.48}
+
+        Button:
+            text: "Generate Dataset"
+            font_size: 20
+            size_hint: 0.4, 0.075
+            pos_hint: {"center_x":0.50, "center_y": 0.38}
+            on_release: root.on_generate()
+
+        Button:
+            text: "Train Model"
+            font_size: 20
+            size_hint: 0.4, 0.075
+            pos_hint: {"center_x":0.50, "center_y": 0.28}
+            on_release: root.on_generate()
+
+        Button:
+            text: "Use Model"
+            font_size: 20
+            size_hint: 0.4, 0.075
+            pos_hint: {"center_x":0.50, "center_y": 0.18}
+            on_release: root.on_generate()
+
+<GenerateWindow>
+    id: generate_window
+    name:"generate_window"
+    canvas.before:
+        Color:
+            rgba: utils.get_color_from_hex('#1c333c')
+        Rectangle:
+            size: self.size
+            pos: self.pos
+    FloatLayout:
+        size: root.width, root.height
+        spacing: 10
+        padding: 20
+
+        Label:
+            text: "Creating new dataset"
+            font_size: 24
+            pos_hint: {"center_x":0.5, "center_y": 0.85}
+
+        Label:
+            text: "Select the 3D model files (.PLY)"
+            font_size: 16
+            pos_hint: {"x":-0.25, "center_y": 0.75}
+
+        BoxLayout:
+            pos_hint: {"x":0.1, "top": 0.70}
+            size_hint: (0.8, 0.4)
+            orientation: 'vertical'
+
+            Spinner:
+                id: model_file_chooser_drive
+                text: 'Choose drive'
+                size_hint: None, None
+                size: 650, 30
+                sync_height: True
+                on_press: generate_window.update_drives()
+                on_text: root.update_file_path_dir()
+
+            FileChooserIconView:
+                id: model_file_chooser
+                multiselect: True
+                path: '.'
+                filters: ['*.ply', '*.PLY']
+                on_selection: root.on_select_file(self.selection)
+
+        Button:
+            id: generate_add_button
+            disabled: True
+            text: 'Add model files'
+            on_release:generate_window.on_add_file()
+            size_hint: (0.2, 0.06)
+            pos_hint: {"right":0.9,"y": 0.20}
+
+
+        Button:
+            id: generate_remove_button
+            disabled: True
+            text: 'Remove selected file'
+            on_release:generate_window.on_remove_files()
+            size_hint: (0.2, 0.06)
+            pos_hint: {"right":0.68,"y": 0.20}
+
+        Label:
+            id: generate_file_num
+            text: "Files added: 0"
+            pos_hint: {"x":-0.310,"center_y": 0.23}
+            font_size: 16
+
+        Label:
+            id: dataset_wrong_file
+            text: ""
+            pos_hint: {"x":-0.210,"center_y": 0.11}
+            color: (0.7, 0, 0, 0.9)
+            font_size: 14
+
+        Button:
+            id: generate_submit_button
+            text: 'Submit models'
+            disabled: True
+            on_release:generate_window.on_submit_models()
+            size_hint: (0.2, 0.06)
+            pos_hint: {"right":0.9,"y": 0.07}
+
+        Button:
+            text: 'Go back'
+            on_release:generate_window.on_back()
+            size_hint: (0.08, 0.04)
+            pos_hint: {"right":0.17,"center_y": 0.85}
+
+<GenerateSettingsWindow>
+    id: generate_settings_window
+    name:"generate_settings_window"
+    canvas.before:
+        Color:
+            rgba: utils.get_color_from_hex('#1c333c')
+        Rectangle:
+            size: self.size
+            pos: self.pos
+
+    FloatLayout:
+        size: root.width, root.height
+        spacing: 10
+        padding: 20
+
+        Label:
+            text: "Creating new dataset"
+            font_size: 24
+            pos_hint: {"center_x":0.5, "center_y": 0.85}
+
+        Label:
+            text: "Enter name for dataset:"
+            font_size: 16
+            pos_hint: {"x":-0.30, "center_y": 0.75}
+
+        TextInput:
+            id: generate_dataset_name
+            size_hint: (0.600, 0.045)
+            multiline: False
+            foreground_color: (1, 1, 1, 1)
+            background_normal: ''
+            background_color: utils.get_color_from_hex('#60686e')
+            pos_hint: {"right":0.91, "center_y": 0.75}
+            halign: 'left'
+            font_size: 14
+            on_text: root.validate()
+
+        Label:
+            text: "Enter number of data pairs to generate:"
+            font_size: 16
+            pos_hint: {"x":-0.23, "center_y": 0.67}
+
+        TextInput:
+            id: generate_dataset_number
+            size_hint: (0.063, 0.045)
+            multiline: False
+            foreground_color: (1, 1, 1, 1)
+            background_normal: ''
+            background_color: utils.get_color_from_hex('#60686e')
+            pos_hint: {"right":0.52, "center_y": 0.67}
+            halign: 'center'
+            font_size: 14
+            on_text: root.validate()
+
+        Label:
+            text: "Background color:"
+            font_size: 16
+            pos_hint: {"x":-0.32, "center_y": 0.57}
+
+        GridLayout:
+            cols: 3
+            size_hint: (0.600, 0.1)
+            pos_hint: {"right":0.91, "center_y": 0.57}
+            CheckBox:
+                group: 'background_color'
+                id : back_default
+                active: True
+                allow_no_selection: False
+                on_active: root.on_back_default()
+
+            CheckBox:
+                group: 'background_color'
+                id : back_random
+                allow_no_selection: False
+                on_active: root.on_back_random()
+
+            CheckBox:
+                group: 'background_color'
+                id : back_custom
+                allow_no_selection: False
+                on_active: root.on_back_custom()
+
+            Label:
+                text: "Default color"
+                font_size: 16
+
+            Label:
+                text: "Random colors"
+                font_size: 16
+
+            Label:
+                text: "Custom color"
+                font_size: 16
+
+        Label:
+            text: "Custom background color:"
+            font_size: 16
+            pos_hint: {"x":-0.285, "center_y": 0.47}
+
+        GridLayout:
+            cols: 4
+            size_hint: (0.300, 0.17)
+            pos_hint: {"right":0.91, "center_y": 0.44}
+            spacing: 10
+            padding: 20
+
+            TextInput:
+                id: background_red
+                disabled: True
+                text: "0.03"
+                size: (0.1, 0.01)
+                multiline: False
+                foreground_color: (1, 1, 1, 1)
+                background_normal: ''
+                background_color: utils.get_color_from_hex('#60686e')
+                halign: 'center'
+                font_size: 14
+                on_text: root.validate()
+
+            TextInput:
+                id: background_green
+                disabled: True
+                text: "0.03"
+                size: (0.1, 0.01)
+                multiline: False
+                foreground_color: (1, 1, 1, 1)
+                background_normal: ''
+                background_color: utils.get_color_from_hex('#60686e')
+                halign: 'center'
+                font_size: 14
+                on_text: root.validate()
+
+            TextInput:
+                id: background_blue
+                disabled: True
+                text: "0.03"
+                size: (0.1, 0.01)
+                multiline: False
+                foreground_color: (1, 1, 1, 1)
+                background_normal: ''
+                background_color: utils.get_color_from_hex('#60686e')
+                halign: 'center'
+                font_size: 14
+                on_text: root.validate()
+
+
+            TextInput:
+                id: background_alpha
+                disabled: True
+                text: "0.03"
+                size: (0.1, 0.01)
+                multiline: False
+                foreground_color: (1, 1, 1, 1)
+                background_normal: ''
+                background_color: utils.get_color_from_hex('#60686e')
+                halign: 'center'
+                font_size: 14
+                on_text: root.validate()
+
+            Label:
+                text: "R"
+                font_size: 16
+
+            Label:
+                text: "G"
+                font_size: 16
+
+            Label:
+                text: "B"
+                font_size: 16
+
+            Label:
+                text: "A"
+                font_size: 16
+
+        Label:
+            text: "Object colors:"
+            font_size: 16
+            pos_hint: {"x":-0.34, "center_y": 0.32}
+
+        GridLayout:
+            cols: 2
+            size_hint: (0.600, 0.1)
+            pos_hint: {"right":0.91, "center_y": 0.32}
+
+            CheckBox:
+                group: 'object_color'
+                id : object_random
+                active: True
+                allow_no_selection: False
+                on_active: root.on_object_random()
+
+            CheckBox:
+                group: 'object_color'
+                id : object_custom
+                allow_no_selection: False
+                on_active: root.on_object_custom()
+
+            Label:
+                text: "Random colors"
+                font_size: 16
+
+            Label:
+                text: "Custom color"
+                font_size: 16
+
+        Label:
+            text: "Custom object color:"
+            font_size: 16
+            pos_hint: {"x":-0.310, "center_y": 0.22}
+
+        GridLayout:
+            cols: 4
+            size_hint: (0.300, 0.17)
+            pos_hint: {"right":0.91, "center_y": 0.19}
+            spacing: 10
+            padding: 20
+
+            TextInput:
+                id: object_red
+                disabled: True
+                text: "0.00"
+                size: (0.1, 0.01)
+                multiline: False
+                foreground_color: (1, 1, 1, 1)
+                background_normal: ''
+                background_color: utils.get_color_from_hex('#60686e')
+                halign: 'center'
+                font_size: 14
+                on_text: root.validate()
+
+            TextInput:
+                id: object_green
+                disabled: True
+                text: "0.00"
+                size: (0.1, 0.01)
+                multiline: False
+                foreground_color: (1, 1, 1, 1)
+                background_normal: ''
+                background_color: utils.get_color_from_hex('#60686e')
+                halign: 'center'
+                font_size: 14
+                on_text: root.validate()
+
+            TextInput:
+                id: object_blue
+                disabled: True
+                text: "0.00"
+                size: (0.1, 0.01)
+                multiline: False
+                foreground_color: (1, 1, 1, 1)
+                background_normal: ''
+                background_color: utils.get_color_from_hex('#60686e')
+                halign: 'center'
+                font_size: 14
+                on_text: root.validate()
+
+
+            TextInput:
+                id: object_alpha
+                disabled: True
+                text: "0.00"
+                size: (0.1, 0.01)
+                multiline: False
+                foreground_color: (1, 1, 1, 1)
+                background_normal: ''
+                background_color: utils.get_color_from_hex('#60686e')
+                halign: 'center'
+                font_size: 14
+                on_text: root.validate()
+
+            Label:
+                text: "R"
+                font_size: 16
+
+            Label:
+                text: "G"
+                font_size: 16
+
+            Label:
+                text: "B"
+                font_size: 16
+
+            Label:
+                text: "A"
+                font_size: 16
+
+        Button:
+            id: generate_start_button
+            text: 'Start generating'
+            disabled: True
+            on_release:root.on_start_generating()
+            size_hint: (0.2, 0.06)
+            pos_hint: {"right":0.9,"y": 0.05}
+
+        Button:
+            text: 'Go back'
+            on_release:root.on_back()
+            size_hint: (0.08, 0.06)
+            pos_hint: {"right":0.17,"center_y": 0.85}
+
+<GeneratePendingWindow>
+    id: generate_pending_window
+    name:"generate_pending_window"
+    canvas.before:
+        Color:
+            rgba: utils.get_color_from_hex('#1c333c')
+        Rectangle:
+            size: self.size
+            pos: self.pos
+
+    FloatLayout:
+        size: root.width, root.height
+        spacing: 10
+        padding: 20
+
+        Label:
+            text: "Creating Dataset"
+            font_size: 24
+            pos_hint: {"center_x":0.5, "center_y": 0.85}
+
+        Label:
+            id: generate_progress_status
+            text: "Please wait until the data set is created"
+            font_size: 20
+            pos_hint: {"center_x":0.5, "center_y": 0.65}
+
+        Label:
+            id: generate_progress_value
+            text: "0% Progress"
+            pos_hint: {"center_x":0.5, "center_y": 0.55}
+
+        ProgressBar:
+            id: generate_progress_bar
+            value: 0
+            min: 0
+            max: 100
+            pos_hint: {'x': 0.1}
+            size_hint: 0.8, 1
+
+        Label:
+            id: generate_progress_file
+            text: "Processing"
+            pos_hint: {"center_x":0.5, "center_y": 0.45}
+
+        Button:
+            id: generate_finish_button
+            text: 'Finish'
+            disabled: True
+            on_release: app.root.current = "start_window"
+            size_hint: (0.12, 0.05)
+            pos_hint: {"right":0.9,"y": 0.16}
+
+        Button:
+            id: generate_cancel_button
+            text: 'Cancel'
+            on_release:root.cancel_process()
+            background_color: (1, 0, 0, 1)
+            size_hint: (0.12, 0.05)
+            pos_hint: {"right":0.22,"y": 0.16}

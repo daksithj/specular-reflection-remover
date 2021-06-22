@@ -3,14 +3,19 @@ import subprocess
 import shutil
 
 
-def start_generating(dataset_name, model_list, data_num, external=True):
+def start_generating(dataset_name, model_list, data_num, background=None, objects=None, external=True):
 
     if external:
         script = "DatasetCreator/synthetic_gen.py"
-        asset_dir = f"DatasetCreator/assets/{dataset_name}"
+        assets_base = f"DatasetCreator/assets"
+        asset_dir = f"{assets_base}/{dataset_name}"
     else:
         script = "synthetic_gen.py"
-        asset_dir = f"assets/{dataset_name}"
+        assets_base = f'assets'
+        asset_dir = f"{assets_base}/{dataset_name}"
+
+    if not os.path.exists(assets_base):
+        os.mkdir(assets_base)
 
     if not os.path.exists(asset_dir):
         os.mkdir(asset_dir)
@@ -18,16 +23,24 @@ def start_generating(dataset_name, model_list, data_num, external=True):
     for file in model_list:
         shutil.copy(file, asset_dir)
 
-    process = subprocess.Popen(f'blender --background --python {script} -- {dataset_name} 50 120 {data_num}',
-                               stdout=subprocess.PIPE)
+    gen_cmd = f'blender --background --python {script} -- {dataset_name} 50 120 {data_num}'
 
-    while True:
-        line = process.stdout.readline()
-        if not line:
-            break
-        if "Generated output" in str(line):
-            number = str(line).split('_')[1]
-            number = int(number)
-            print(number)
+    if background is not None:
+        gen_cmd += f' --background {background}'
 
-    shutil.rmtree(asset_dir)
+    if objects is not None:
+        gen_cmd += f' --object {objects}'
+
+    process = subprocess.Popen(gen_cmd, stdout=subprocess.PIPE)
+
+    return process
+    # while True:
+    #     line = process.stdout.readline()
+    #     if not line:
+    #         break
+    #     if "Generated output" in str(line):
+    #         number = str(line).split('_')[1]
+    #         number = int(number)
+    #         print(number)
+    #
+    # shutil.rmtree(asset_dir)
