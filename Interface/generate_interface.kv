@@ -2,62 +2,9 @@
 #: import Factory kivy.factory.Factory
 
 WindowManager:
-    StartWindow:
     GenerateWindow:
     GenerateSettingsWindow:
     GeneratePendingWindow:
-
-<StartWindow>
-    name:"start_window"
-    canvas.before:
-        Color:
-            rgba: utils.get_color_from_hex('#1c333c')
-        Rectangle:
-            size: self.size
-            pos: self.pos
-
-    FloatLayout:
-        size: root.width, root.height
-        spacing: 10
-        padding: 20
-
-        Image:
-            source: 'Interface/logo.png'
-            size_hint: 0.25, 0.25
-            pos_hint: {"center_x":0.5, "center_y": 0.80}
-
-        Label:
-            text: "Welcome to SpecToPose"
-            font_size: 32
-            bold: True
-            pos_hint: {"center_x":0.5, "center_y": 0.60}
-
-        Label:
-            text: "Please select mode"
-            font_size: 20
-            valign: 'top'
-            pos_hint: {"center_x":0.5, "center_y": 0.48}
-
-        Button:
-            text: "Generate Dataset"
-            font_size: 20
-            size_hint: 0.4, 0.075
-            pos_hint: {"center_x":0.50, "center_y": 0.38}
-            on_release: root.on_generate()
-
-        Button:
-            text: "Train Model"
-            font_size: 20
-            size_hint: 0.4, 0.075
-            pos_hint: {"center_x":0.50, "center_y": 0.28}
-            on_release: root.on_generate()
-
-        Button:
-            text: "Use Model"
-            font_size: 20
-            size_hint: 0.4, 0.075
-            pos_hint: {"center_x":0.50, "center_y": 0.18}
-            on_release: root.on_generate()
 
 <GenerateWindow>
     id: generate_window

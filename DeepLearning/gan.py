@@ -17,23 +17,29 @@ network_directory = 'DeepLearning/Networks/'
 
 class SpecToPoseNet:
 
-    def __init__(self, network_name, image_dataset: ImageDataSet):
+    def __init__(self, network_name, image_dataset=None):
 
         self.batch_size = 1
-
-        self.image_dataset = image_dataset
-
-        self.channels = image_dataset.channels
-        self.image_pairs = image_dataset.pairs
-        self.image_size = image_dataset.image_size
-
-        self.image_shape = (self.image_size, self.image_size * self.image_pairs, self.channels)
 
         self.network_name = network_name
         self.network_location = network_directory + self.network_name + '/'
         self.summary_location = self.network_location + 'Summary/'
-        self.matrix_location = image_dataset.matrix_dir
         self.network_data_location = self.network_location + 'network_data.json'
+
+        if isinstance(image_dataset, ImageDataSet):
+            self.image_dataset = image_dataset
+        else:
+            self.image_dataset = self.set_image_dataset()
+
+        self.channels = self.image_dataset.channels
+        self.image_pairs = self.image_dataset.pairs
+        self.image_size = self.image_dataset.image_size
+
+        self.image_shape = (self.image_size, self.image_size * self.image_pairs, self.channels)
+
+
+        self.matrix_location = self.image_dataset.matrix_dir
+
 
         self.feature_patch_size = 32
         self.patch_shape = (self.feature_patch_size, self.feature_patch_size, 3)
@@ -90,6 +96,15 @@ class SpecToPoseNet:
 
             gan_model = self.build_gan(generator, discriminator)
 
+            if not os.path.exists(network_directory):
+                os.mkdir(network_directory)
+
+            if not os.path.exists(self.network_location):
+                os.mkdir(self.network_location)
+
+            generator.save(self.network_location + 'generator.h5')
+            discriminator.save(self.network_location + 'discriminator.h5')
+
             return False, generator, discriminator, gan_model
 
     def load_network_data(self):
@@ -104,10 +119,21 @@ class SpecToPoseNet:
                 'channels': self.channels,
                 'pairs': int(self.image_pairs),
                 'epochs': 0,
-                'steps': 0
+                'steps': 0,
+                'dataset_name': self.image_dataset.dataset_name
             }
 
+        with open(self.network_data_location, 'w') as f:
+            json.dump(network_data, f)
         return network_data
+
+    def set_image_dataset(self):
+        if os.path.exists(self.network_data_location):
+            with open(self.network_data_location) as f:
+                network_data = json.load(f)
+                return ImageDataSet(network_data['dataset_name'])
+        else:
+            raise ValueError("Cannot find dataset for model.")
 
     def reset_network(self):
         self.generator = self.build_generator()
@@ -121,7 +147,8 @@ class SpecToPoseNet:
             'channels': self.channels,
             'pairs': int(self.image_pairs),
             'epochs': 0,
-            'steps': 0
+            'steps': 0,
+            "dataset_name": self.image_dataset.dataset_name
         }
 
         if os.path.exists(self.summary_location):

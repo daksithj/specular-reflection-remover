@@ -19,6 +19,8 @@ class ImageDataSet(Sequence):
 
         self.batch_size = batch_size
 
+        self.dataset_name = dataset_name
+
         self.dataset_folder = self.check_dataset_folders(dataset_name)
         self.specular_dir = self.dataset_folder + "/Specular/"
         self.diffuse_dir = self.dataset_folder + "/Diffuse/"
