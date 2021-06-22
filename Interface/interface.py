@@ -1,13 +1,12 @@
 from kivy.app import App
 from kivy.lang import Builder
-from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.core.audio import SoundLoader
 from kivy.uix.screenmanager import ScreenManager, Screen, RiseInTransition, ScreenManagerException
 from kivy.uix.popup import Popup
 from threading import Thread
 from DatasetCreator.gen_tools import start_generating
 import psutil
+import shutil
 import numpy as np
 import os
 
@@ -33,6 +32,33 @@ class GeneratePendingWindow(Screen):
         process = start_generating(self.params['name'], self.params['models'], self.params['data_num'],
                                    self.params['background'], self.params['objects'])
 
+        Thread(target=self.update_pending, args=[process], daemon=True).start()
+
+    def update_pending(self, process):
+        while True:
+            line = process.stdout.readline()
+            if not line:
+                break
+            if self.kill_signal:
+                process.kill()
+                break
+            if "Generated output" in str(line):
+                number = str(line).split('_')[1]
+                number = int(number)
+                progress = int(number/self.params['data_num']* 100)
+                self.ids.generate_progress_bar.value = progress
+                self.ids.generate_progress_value.text = f"{progress}% Progress"
+                self.ids.generate_progress_file.text = f"Generated pair {number}/{self.params['data_num']}"
+
+        self.ids.generate_finish_button.disabled = False
+        shutil.rmtree(f"DatasetCreator/assets/{self.params['name']}")
+
+    def cancel_process(self):
+        self.kill_signal = True
+        self.ids.generate_cancel_button.disabled = True
+        self.ids.generate_progress_status.text = "Dataset generation cancelled!"
+        self.ids.generate_progress_value.text = f"Cancelled"
+
 class GenerateSettingsWindow(Screen):
 
     def __init__(self, **kwargs):
@@ -52,6 +78,23 @@ class GenerateSettingsWindow(Screen):
 
         self.custom_object_colors = [self.ids.object_red, self.ids.object_green,
                                    self.ids.object_blue, self.ids.object_alpha]
+
+        self.ids.generate_dataset_name.text = ""
+        self.ids.generate_dataset_number.text = ""
+
+        self.ids.back_default.active = True
+        self.ids.object_random.active = True
+
+        for color in self.custom_back_colors:
+            color.text = "0.03"
+            color.disabled = True
+
+        for color in self.custom_object_colors:
+            color.text = "0.00"
+            color.disabled = True
+
+        self.random_back_color = False
+        self.random_object_color = True
 
     def on_back_default(self):
 
@@ -256,8 +299,8 @@ class GenerateWindow(Screen):
         except ScreenManagerException:
             self.manager.add_widget(self.settings_window)
 
-        self.settings_window.file_list = self.file_list
         self.manager.current = 'generate_settings_window'
+        self.settings_window.file_list = self.file_list[:]
 
     def on_back(self):
         self.manager.current = "start_window"
@@ -299,14 +342,14 @@ class WindowManager(ScreenManager):
         self.transition = RiseInTransition()
         self.add_widget(StartWindow())
         self.add_widget(GenerateWindow())
-        self.add_widget(GenerateSettingsWindow())
+        # self.add_widget(GenerateSettingsWindow())
         self.current = 'generate_window'
 
 
 class SpecToPoseApp(App):
 
     def build(self):
-        self.title = 'Interface/SpecToPose'
+        self.title = 'SpecToPose'
         self.icon = 'Interface/logo.png'
         Builder.load_file('Interface/interface.kv')
         wm = WindowManager()

@@ -23,7 +23,7 @@ def start_generating(dataset_name, model_list, data_num, background=None, object
     for file in model_list:
         shutil.copy(file, asset_dir)
 
-    gen_cmd = f'blender --background --python {script} -- {dataset_name} 50 120 {data_num}'
+    gen_cmd = f'blender --background --python {script} --name {dataset_name}  --res 50 --samp 120  --num {data_num}'
 
     if background is not None:
         gen_cmd += f' --background {background}'
@@ -34,13 +34,3 @@ def start_generating(dataset_name, model_list, data_num, background=None, object
     process = subprocess.Popen(gen_cmd, stdout=subprocess.PIPE)
 
     return process
-    # while True:
-    #     line = process.stdout.readline()
-    #     if not line:
-    #         break
-    #     if "Generated output" in str(line):
-    #         number = str(line).split('_')[1]
-    #         number = int(number)
-    #         print(number)
-    #
-    # shutil.rmtree(asset_dir)
