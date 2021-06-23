@@ -41,7 +41,7 @@ WindowManager:
             font_size: 20
             size_hint: 0.4, 0.075
             pos_hint: {"center_x":0.50, "center_y": 0.38}
-            on_release: root.on_generate()
+            on_release: root.on_generate_window()
 
         Button:
             text: "Manage Models"
@@ -55,7 +55,7 @@ WindowManager:
             font_size: 20
             size_hint: 0.4, 0.075
             pos_hint: {"center_x":0.50, "center_y": 0.18}
-            on_release: root.on_generate()
+            on_release: root.on_use_window()
 
 <CreateSuccessPopup@Popup>
     title:"Success"

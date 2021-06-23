@@ -384,3 +384,32 @@ def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=Fa
         cv2.waitKey(0)
 
     return poses
+
+
+def get_pose_with_centres(img_1, img_2, disparity_map_matrix):
+
+    object_masks = get_object_masks(img_1, k_1=15, k_2=3)
+    disparity_map = get_disparity_map(img_1, img_2)
+
+    location_map, lambda_map, disparity_map_matrix = get_3d_points(disparity_map, disparity_map_matrix)
+    remove_outliers(location_map)
+
+    object_points = apply_mask(location_map, object_masks)
+
+    poses = []
+    images = []
+
+    for item in object_points:
+        centre, axis_point_1, axis_point_2 = get_axis(item)
+        rotation = get_object_rotation(axis_point_1, axis_point_2)
+
+        poses.append({'location': centre, 'rotation': rotation})
+        colour = (randint(0, 255), randint(0, 255), randint(0, 255))
+
+        image = img_1.copy()
+
+        draw_axis(image, item, centre, axis_point_1, lambda_map, disparity_map_matrix, colour=colour)
+
+        images.append(image)
+
+    return poses, images

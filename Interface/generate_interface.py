@@ -39,7 +39,7 @@ class GeneratePendingWindow(Screen):
             if "Generated output" in str(line):
                 number = str(line).split('_')[1]
                 number = int(number)
-                progress = int(number/self.params['data_num']* 100)
+                progress = int(number/self.params['data_num'] * 100)
                 self.ids.generate_progress_bar.value = progress
                 self.ids.generate_progress_value.text = f"{progress}% Progress"
                 self.ids.generate_progress_file.text = f"Generated pair {number}/{self.params['data_num']}"
@@ -52,6 +52,7 @@ class GeneratePendingWindow(Screen):
         self.ids.generate_cancel_button.disabled = True
         self.ids.generate_progress_status.text = "Dataset generation cancelled!"
         self.ids.generate_progress_value.text = f"Cancelled"
+
 
 class GenerateSettingsWindow(Screen):
 
@@ -67,11 +68,11 @@ class GenerateSettingsWindow(Screen):
         self.pending_window = GeneratePendingWindow()
 
     def on_pre_enter(self, *args):
-        self.custom_back_colors = [self.ids.background_red, self.ids.background_green,
-                              self.ids.background_blue, self.ids.background_alpha]
+        self.custom_back_colors = [self.ids.background_red, self.ids.background_green, self.ids.background_blue,
+                                   self.ids.background_alpha]
 
-        self.custom_object_colors = [self.ids.object_red, self.ids.object_green,
-                                   self.ids.object_blue, self.ids.object_alpha]
+        self.custom_object_colors = [self.ids.object_red, self.ids.object_green, self.ids.object_blue,
+                                     self.ids.object_alpha]
 
         self.ids.generate_dataset_name.text = ""
         self.ids.generate_dataset_number.text = ""
@@ -211,7 +212,6 @@ class GenerateSettingsWindow(Screen):
 
     def on_back(self):
         self.manager.current = "generate_window"
-
 
 
 class GenerateWindow(Screen):

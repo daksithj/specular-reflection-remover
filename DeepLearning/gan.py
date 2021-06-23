@@ -10,6 +10,10 @@ import random
 import json
 import os
 import cv2
+import matplotlib
+
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 
 network_directory = 'DeepLearning/Networks/'
@@ -37,9 +41,7 @@ class SpecToPoseNet:
 
         self.image_shape = (self.image_size, self.image_size * self.image_pairs, self.channels)
 
-
         self.matrix_location = self.image_dataset.matrix_dir
-
 
         self.feature_patch_size = 32
         self.patch_shape = (self.feature_patch_size, self.feature_patch_size, 3)
@@ -53,7 +55,7 @@ class SpecToPoseNet:
 
         self.discriminator_loss = 'binary_crossentropy'
         self.generator_loss = 'mae'
-        self.use_vgg_loss = True
+        self.use_vgg_loss = False
         self.use_location_loss = False
 
         self.discriminator_loss_weight = 1
@@ -532,7 +534,7 @@ class SpecToPoseNet:
         plt.close()
         print('>Saved summary to: %s ' % filename)
 
-    def train_gan(self, toggle_vgg=-1, toggle_location_loss=-1, epochs=100):
+    def train_gan(self, toggle_vgg=-1, toggle_location_loss=-1, epochs=100, gui=None):
 
         if not os.path.exists(self.summary_location):
             os.makedirs(self.summary_location)
@@ -545,7 +547,11 @@ class SpecToPoseNet:
 
         steps = int(self.network_data['steps'])
 
-        for epoch in range(total_epochs, total_epochs + epochs):
+        total_steps = int(epochs * data_len)
+
+        epoch = total_epochs
+
+        while epoch < (total_epochs + epochs):
 
             if epoch - total_epochs == toggle_vgg:
                 self.use_vgg_loss = not self.use_vgg_loss
@@ -587,9 +593,23 @@ class SpecToPoseNet:
                 self.network_data['epochs'] = epoch
                 self.network_data['steps'] = steps
 
-                if steps % 20 == 0:
+                if steps % 4 == 0:
                     with open(self.network_data_location, 'w') as f:
                         json.dump(self.network_data, f)
+
+                    if gui is not None:
+                        progress = int(((steps + (epoch - total_epochs)*data_len)/total_steps)*100)
+                        gui.ids.train_progress_value.text = f"{progress}% Progress"
+                        gui.ids.train_progress_bar.value = progress
+                        gui.ids.train_progress_file.text = f"Total Epoch: {epoch}    Trained epochs: " \
+                                                           f"{epoch - total_epochs}/{epochs}    Step: {steps}"
+                        if self.use_vgg_loss:
+                            gui.ids.train_progress_file.text += "  Using VGG Loss"
+                        if self.use_location_loss:
+                            gui.ids.train_progress_file.text += "  Using location Loss"
+
+                        if gui.kill_signal:
+                            break
 
                 if steps % 100 == 0:
                     self.training_summary(self.generator, self.summary_location, epoch, steps, self.batch_size)
@@ -600,6 +620,9 @@ class SpecToPoseNet:
 
             self.image_dataset.on_epoch_end()
 
+            steps = 0
+            epochs += 1
+
             self.training_summary(self.generator, self.summary_location, epoch, self.batch_size)
             self.generator.save(self.network_location + 'generator.h5')
             self.discriminator.save(self.network_location + 'discriminator.h5')
@@ -609,7 +632,9 @@ class SpecToPoseNet:
             with open(self.network_data_location, 'w') as f:
                 json.dump(self.network_data, f)
 
-            steps = 0
+            if gui is not None:
+                if gui.kill_signal:
+                    break
 
     def get_output(self, views):
 

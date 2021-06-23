@@ -1,0 +1,195 @@
+#: import utils kivy.utils
+#: import Factory kivy.factory.Factory
+
+<UseWindow>
+    id: use_window
+    name:"use_window"
+    canvas.before:
+        Color:
+            rgba: utils.get_color_from_hex('#1c333c')
+        Rectangle:
+            size: self.size
+            pos: self.pos
+    FloatLayout:
+        size: root.width, root.height
+        spacing: 10
+        padding: 20
+
+        Label:
+            text: "Use model"
+            font_size: 24
+            pos_hint: {"center_x":0.5, "center_y": 0.90}
+
+        Label:
+            text: "Select the trained model"
+            font_size: 16
+            bold: False
+            pos_hint: {"x":-0.25, "center_y": 0.82}
+
+        Spinner:
+            id: use_model_chooser
+            text: 'Choose a model'
+            size_hint: None, None
+            pos_hint: {"center_x":0.5, "center_y": 0.75}
+            size: 600, 30
+            sync_height: True
+            on_press: root.list_models()
+            on_text: root.select_model()
+        Label:
+            text: "Select the left and right images"
+            font_size: 16
+            bold: False
+            pos_hint: {"x":-0.23, "center_y": 0.68}
+
+        BoxLayout:
+            pos_hint: {"center_x":0.523, "center_y": 0.45}
+            size_hint: (0.8, 0.4)
+            orientation: 'vertical'
+
+            Spinner:
+                id: use_file_chooser_drive
+                text: 'Choose drive'
+                size_hint: None, None
+                size: 600, 30
+                sync_height: True
+                on_press: root.update_drives()
+                on_text: root.update_file_path_dir()
+
+            FileChooserIconView:
+                id: use_file_chooser
+                multiselect: False
+                path: '.'
+                filters: ['*.png', '*.jpg', '*.jpeg']
+                on_selection: root.on_select_file(self.selection)
+
+        Label:
+            id: convert_error
+            text: ""
+            font_size: 16
+            bold: False
+            pos_hint: {"center_y":0.5, "center_y": 0.05}
+
+        Button:
+            id: left_add_button
+            text: 'Add left image'
+            disabled: True
+            on_release: root.add_left_image()
+            size_hint: (0.22, 0.06)
+            pos_hint: {"right":0.33,"y": 0.15}
+
+        Button:
+            id: left_remove_button
+            text: 'Remove left image'
+            disabled: True
+            on_release: root.remove_left_image()
+            background_color: (1, 0, 0, 1)
+            size_hint: (0.22, 0.06)
+            pos_hint: {"right":0.33,"y": 0.09}
+
+        Button:
+            id: right_add_button
+            text: 'Add right image'
+            disabled: True
+            on_release: root.add_right_image()
+            size_hint: (0.22, 0.06)
+            pos_hint: {"right":0.88,"y": 0.15}
+
+        Button:
+            id: right_remove_button
+            text: 'Remove right image'
+            disabled: True
+            on_release: root.remove_right_image()
+            background_color: (1, 0, 0, 1)
+            size_hint: (0.22, 0.06)
+            pos_hint: {"right":0.88,"y": 0.09}
+
+        Button:
+            id: convert_button
+            text: 'Convert'
+            disabled: True
+            on_release: root.convert()
+            size_hint: (0.22, 0.06)
+            background_color: (0, 1, 0.7, 1)
+            pos_hint: {"right":0.605,"y": 0.12}
+
+        Button:
+            text: 'Go back'
+            on_release:root.on_back()
+            size_hint: (0.08, 0.06)
+            pos_hint: {"right":0.17,"center_y": 0.90}
+
+<ResultWindow>
+    id: result_window
+    name:"result_window"
+    canvas.before:
+        Color:
+            rgba: utils.get_color_from_hex('#1c333c')
+        Rectangle:
+            size: self.size
+            pos: self.pos
+    FloatLayout:
+        size: root.width, root.height
+        spacing: 10
+        padding: 20
+
+        Label:
+            text: "Converted Results"
+            font_size: 24
+            pos_hint: {"center_x":0.5, "center_y": 0.85}
+
+        Image:
+            id: result_image
+            source: 'Interface/logo.png'
+            size_hint : 0.60, 0.60
+            allow_stretch: True
+            keep_ratio: True
+            pos_hint: {"center_x": 0.3, "center_y": 0.45}
+
+        Spinner:
+            id: result_chooser
+            text: 'Choose an object'
+            size_hint: None, None
+            pos_hint: {"center_x":0.75, "center_y": 0.70}
+            size: 200, 30
+            sync_height: True
+            on_text: root.on_selection()
+
+        GridLayout:
+            cols: 2
+            size_hint: (0.300, 0.40)
+            pos_hint: {"right":0.89, "center_y": 0.45}
+            spacing: 10
+            padding: 20
+
+            Label:
+                text: "X:"
+                font_size: 16
+
+            Label:
+                id: result_y
+                text: "-"
+                font_size: 14
+
+            Label:
+                text: "Y:"
+                font_size: 16
+
+            Label:
+                id: result_x
+                text: "-"
+                font_size: 14
+
+            Label:
+                text: "Z:"
+                font_size: 16
+
+            Label:
+                id: result_z
+                text: "-"
+                font_size: 14
+
+        Button:
+            text: 'Finish'
+            on_release: app.root.current = "use_window"
+            size_hint: (0.12, 0.05)
+            pos_hint: {"right":0.9,"y": 0.16}

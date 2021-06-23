@@ -2,7 +2,8 @@ from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen, RiseInTransition, ScreenManagerException
 from Interface.generate_interface import GenerateWindow
-from Interface.train_interface import ModelWindow, TrainModelWindow
+from Interface.train_interface import ModelWindow
+from Interface.use_interface import UseWindow
 
 
 class StartWindow(Screen):
@@ -12,6 +13,16 @@ class StartWindow(Screen):
         super(StartWindow, self).__init__(**kwargs)
         self.generate_window = GenerateWindow()
         self.model_window = ModelWindow()
+        self.use_window = UseWindow()
+
+    def on_generate_window(self):
+
+        try:
+            self.manager.get_screen("generate_window")
+        except ScreenManagerException:
+            self.manager.add_widget(self.generate_window)
+
+        self.manager.current = "generate_window"
 
     def on_model_window(self):
 
@@ -22,14 +33,14 @@ class StartWindow(Screen):
 
         self.manager.current = "model_window"
 
-    def on_generate(self):
+    def on_use_window(self):
 
         try:
-            self.manager.get_screen("generate_window")
+            self.manager.get_screen("use_window")
         except ScreenManagerException:
-            self.manager.add_widget(self.generate_window)
+            self.manager.add_widget(self.use_window)
 
-        self.manager.current = "generate_window"
+        self.manager.current = "use_window"
 
 
 class WindowManager(ScreenManager):
@@ -40,9 +51,8 @@ class WindowManager(ScreenManager):
 
         self.transition = RiseInTransition()
         self.add_widget(StartWindow())
-        Builder.load_file('Interface/train_interface.kv')
-        self.add_widget(TrainModelWindow())
-        self.current = 'train_model_window'
+
+        self.current = 'start_window'
 
 
 class SpecToPoseApp(App):
@@ -53,6 +63,7 @@ class SpecToPoseApp(App):
         Builder.load_file('Interface/start_interface.kv')
         Builder.load_file('Interface/generate_interface.kv')
         Builder.load_file('Interface/train_interface.kv')
+        Builder.load_file('Interface/use_interface.kv')
         wm = WindowManager()
         return wm
 

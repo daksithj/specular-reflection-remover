@@ -44,15 +44,14 @@
             font_size: 20
             size_hint: 0.4, 0.075
             pos_hint: {"center_x":0.50, "center_y": 0.28}
-            on_release: root.on_generate()
+            on_release: root.on_train_model()
 
         Button:
             text: "Go Back"
             font_size: 20
             size_hint: 0.4, 0.075
             pos_hint: {"center_x":0.50, "center_y": 0.18}
-            on_release: root.on_generate()
-
+            on_release: app.root.current = "start_window"
 
 <NewModelWindow>
     id: new_model_window
@@ -228,7 +227,7 @@
 
         TextInput:
             id: train_epochs
-            text: "100"
+            text: ""
             size_hint: (0.070, 0.045)
             multiline: False
             foreground_color: (1, 1, 1, 1)
@@ -237,7 +236,7 @@
             pos_hint: {"center_x":0.80, "center_y": 0.60}
             halign: 'center'
             font_size: 14
-            #on_text: root.validate()
+            on_text: root.validate()
 
         Label:
             text: "Use VGG Loss:"
@@ -247,16 +246,17 @@
 
         Switch:
             id: use_vgg_switch
-            active: True
+            active: False
             disabled: True
             font_size: 10
             size_hint: (0.22, 0.02)
             pos_hint: {"center_x":0.68, "center_y":0.50}
-            on_active: root.frequency_toggle(*args)
+            on_active: root.validate()
 
         TextInput:
             id: use_vgg_epoch
-            text: "20"
+            disabled: True
+            text: ""
             size_hint: (0.070, 0.045)
             multiline: False
             foreground_color: (1, 1, 1, 1)
@@ -265,7 +265,7 @@
             pos_hint: {"center_x":0.80, "center_y": 0.50}
             halign: 'center'
             font_size: 14
-            #on_text: root.validate()
+            on_text: root.validate()
 
         Label:
             text: "Use Pose Loss:"
@@ -275,16 +275,17 @@
 
         Switch:
             id: use_pose_switch
-            active: True
+            active: False
             disabled: True
             font_size: 10
             size_hint: (0.22, 0.02)
             pos_hint: {"center_x":0.68, "center_y":0.40}
-            on_active: root.frequency_toggle(*args)
+            on_active: root.validate()
 
         TextInput:
             id: use_pose_epoch
-            text: "80"
+            text: ""
+            disabled: True
             size_hint: (0.070, 0.045)
             multiline: False
             foreground_color: (1, 1, 1, 1)
@@ -293,4 +294,78 @@
             pos_hint: {"center_x":0.80, "center_y": 0.40}
             halign: 'center'
             font_size: 14
-            #on_text: root.validate()
+            on_text: root.validate()
+
+        Button:
+            id: train_start_button
+            text: 'Start training'
+            disabled: True
+            on_release:root.start_train()
+            size_hint: (0.2, 0.06)
+            pos_hint: {"right":0.9,"y": 0.07}
+
+        Button:
+            text: 'Go back'
+            on_release:root.on_back()
+            size_hint: (0.08, 0.04)
+            pos_hint: {"right":0.17,"center_y": 0.85}
+
+<TrainPendingWindow>
+    id: train_pending_window
+    name:"train_pending_window"
+    canvas.before:
+        Color:
+            rgba: utils.get_color_from_hex('#1c333c')
+        Rectangle:
+            size: self.size
+            pos: self.pos
+
+    FloatLayout:
+        size: root.width, root.height
+        spacing: 10
+        padding: 20
+
+        Label:
+            text: "Training Model"
+            font_size: 24
+            pos_hint: {"center_x":0.5, "center_y": 0.85}
+
+        Label:
+            id: train_progress_status
+            text: "Please wait until the model is trained"
+            font_size: 20
+            pos_hint: {"center_x":0.5, "center_y": 0.65}
+
+        Label:
+            id: train_progress_value
+            text: ""
+            pos_hint: {"center_x":0.5, "center_y": 0.55}
+
+        ProgressBar:
+            id: train_progress_bar
+            value: 0
+            min: 0
+            max: 100
+            pos_hint: {'x': 0.1}
+            size_hint: 0.8, 1
+
+        Label:
+            id: train_progress_file
+            text: ""
+            pos_hint: {"center_x":0.5, "center_y": 0.45}
+
+        Button:
+            id: train_finish_button
+            text: 'Finish'
+            disabled: True
+            on_release: app.root.current = "start_window"
+            size_hint: (0.12, 0.05)
+            pos_hint: {"right":0.9,"y": 0.16}
+
+        Button:
+            id: train_cancel_button
+            text: 'Cancel'
+            on_release:root.cancel_process()
+            background_color: (1, 0, 0, 1)
+            size_hint: (0.12, 0.05)
+            pos_hint: {"right":0.22,"y": 0.16}
