@@ -503,11 +503,11 @@ class SpecToPoseNet:
         else:
             return specular_image
 
-    def training_summary(self, gen_model, summary_folder, epoch, step=0, samples=1):
+    def training_summary(self, summary_folder, epoch, step=0, samples=1):
 
         specular_real, diffuse_real = self.generate_test_sample(pair=True)
 
-        gen_out, _ = self.generate_output(gen_model, specular_real, 1)
+        gen_out, _ = self.generate_output(self.generator, specular_real, 1)
 
         specular_real = (specular_real + 1) / 2.0
         diffuse_real = (diffuse_real + 1) / 2.0
@@ -549,7 +549,7 @@ class SpecToPoseNet:
 
         total_steps = int(epochs * data_len)
 
-        epoch = total_epochs
+        epoch = 0 + total_epochs
 
         while epoch < (total_epochs + epochs):
 
@@ -612,7 +612,7 @@ class SpecToPoseNet:
                             break
 
                 if steps % 100 == 0:
-                    self.training_summary(self.generator, self.summary_location, epoch, steps, self.batch_size)
+                    self.training_summary(self.summary_location, epoch, steps, self.batch_size)
                     self.generator.save(self.network_location + 'generator.h5')
                     self.discriminator.save(self.network_location + 'discriminator.h5')
 
@@ -621,7 +621,7 @@ class SpecToPoseNet:
             self.image_dataset.on_epoch_end()
 
             steps = 0
-            epochs += 1
+            epoch += 1
 
             self.training_summary(self.generator, self.summary_location, epoch, self.batch_size)
             self.generator.save(self.network_location + 'generator.h5')

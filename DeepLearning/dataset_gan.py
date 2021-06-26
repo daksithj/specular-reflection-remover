@@ -196,11 +196,18 @@ class ImageDataSet(Sequence):
             s_view = cv2.imread(s_view_name)
             images.append(s_view)
 
+        targets = []
+
+        for y in range(1, self.pairs + 1):
+            t_view_name = self.diffuse_dir + str(x) + "_" + str(y) + image_extension
+            t_view = cv2.imread(t_view_name)
+            targets.append(t_view)
+
         loc_file = open(f'{self.location_dir}/location_{x}', 'rb')
         locations = pkl.load(loc_file)
         loc_file.close()
 
-        return images, locations
+        return images, targets,  locations
 
     def __len__(self):
         return self.data_num / self.batch_size

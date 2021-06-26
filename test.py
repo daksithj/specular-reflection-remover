@@ -12,7 +12,7 @@ def test_full():
 
     network = SpecToPoseNet('model_1', dataset)
 
-    images, real_locations = dataset.get_test_pair()
+    images, targets, real_locations = dataset.get_test_pair()
 
     image_1, image_2 = images
 

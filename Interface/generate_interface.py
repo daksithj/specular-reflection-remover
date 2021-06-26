@@ -26,6 +26,8 @@ class GeneratePendingWindow(Screen):
         process = start_generating(self.params['name'], self.params['models'], self.params['data_num'],
                                    self.params['background'], self.params['objects'])
 
+        self.kill_signal = False
+
         Thread(target=self.update_pending, args=[process], daemon=True).start()
 
     def update_pending(self, process):

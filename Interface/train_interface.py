@@ -179,6 +179,9 @@ class TrainModelWindow(Screen):
 
         model_name = self.ids.train_model_chooser.text
 
+        if model_name == 'Choose a model':
+            return
+
         network_data_location = f"{NETWORK_FOLDER}/{model_name}/network_data.json"
 
         with open(network_data_location) as f:
