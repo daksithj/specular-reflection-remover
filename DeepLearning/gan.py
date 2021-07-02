@@ -528,11 +528,14 @@ class SpecToPoseNet:
             plt.axis('off')
             plt.imshow(diffuse_real[i])
 
-        filename = '/plot_%04d_%05d.png' % ((epoch + 1), step)
-        filename = summary_folder + filename
-        plt.savefig(filename)
-        plt.close()
-        print('>Saved summary to: %s ' % filename)
+        try:
+            filename = '/plot_%04d_%05d.png' % ((epoch + 1), step)
+            filename = summary_folder + filename
+            plt.savefig(filename)
+            plt.close()
+            print('>Saved summary to: %s ' % filename)
+        except TypeError:
+            pass
 
     def train_gan(self, toggle_vgg=-1, toggle_location_loss=-1, epochs=100, gui=None):
 

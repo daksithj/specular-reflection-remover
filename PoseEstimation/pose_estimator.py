@@ -330,7 +330,7 @@ def draw_axis(img, object_point, centre, axis_point_1, lambda_map, disparity_map
 
 def draw_real_locations(img, object_point, centre, lambda_map, disparity_map_matrix, real_locations):
 
-    closest = get_closest_location(real_locations, centre)
+    closest, _ = get_closest_location(real_locations, centre)
 
     centre_x, centre_y = get_image_coordinates(closest, lambda_map, object_point, disparity_map_matrix)
 
@@ -352,7 +352,8 @@ def show_object_masks(object_masks):
         cv2.waitKey(0)
 
 
-def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=False, real_locations=None):
+def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=False, real_locations=None,
+             get_image=False):
 
     object_masks = get_object_masks(img_1, k_1=15, k_2=3)
     disparity_map = get_disparity_map(img_1, img_2)
@@ -378,6 +379,9 @@ def get_pose(img_1, img_2, disparity_map_matrix, draw_line=False, draw_points=Fa
 
         if real_locations is not None:
             draw_real_locations(img_1, item, centre, lambda_map, disparity_map_matrix, real_locations)
+
+    if get_image:
+        return img_1
 
     if draw_points or draw_line:
         cv2.imshow('Window', img_1)

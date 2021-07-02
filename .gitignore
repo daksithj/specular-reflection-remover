@@ -5,3 +5,4 @@ DatasetCreator/assets/models/*
 DeepLearning/Networks/*
 DeepLearning/Models/Discriminator/*
 DeepLearning/Models/Generator/*
+TestData/*

@@ -187,7 +187,7 @@ class ImageDataSet(Sequence):
 
     def get_test_pair(self):
 
-        x = random.randint(0, self.data_num)
+        x = random.randint(0, self.data_num-1)
 
         images = []
 

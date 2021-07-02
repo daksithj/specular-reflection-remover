@@ -1,8 +1,9 @@
 from kivy.uix.screenmanager import Screen, ScreenManagerException
 from kivy.graphics.texture import Texture
 from DeepLearning.gan import SpecToPoseNet
-from PoseEstimation.pose_estimator import get_pose_with_centres, get_disparity_map_matrix
+from PoseEstimation.pose_estimator import get_pose, get_pose_with_centres, get_disparity_map_matrix
 from Interface.train_interface import get_model_list
+from threading import Thread
 import psutil
 import cv2
 
@@ -195,6 +196,11 @@ class ResultWindow(Screen):
         self.images_set = []
 
     def on_enter(self, *args):
+        self.ids.result_chooser.text = 'Processing'
+        self.ids.result_x.text = "-"
+        self.ids.result_y.text = "-"
+        self.ids.result_z.text = "-"
+        self.ids.result_chooser.value = []
 
         self.convert_left, self.convert_right = self.model.get_output([self.left_image, self.right_image])
 
@@ -204,10 +210,19 @@ class ResultWindow(Screen):
         texture1.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
         self.ids.result_image.texture = texture1
 
+        Thread(target=self.calculate_pose, args=[], daemon=True).start()
+
+    def calculate_pose(self):
+
         disparity_map_matrix = get_disparity_map_matrix(self.model.image_dataset.matrix_dir,
                                                         self.convert_left.shape[:2])
 
         poses, self.images_set = get_pose_with_centres(self.convert_left, self.convert_right, disparity_map_matrix)
+
+        specular_pose_image = get_pose(self.left_image, self.right_image, disparity_map_matrix, draw_line=True,
+                                       get_image=True)
+
+        self.images_set.append(specular_pose_image)
 
         self.location_set = []
         result_set = []
@@ -218,6 +233,8 @@ class ResultWindow(Screen):
         for x in range(len(self.location_set)):
             result_set.append(f"Object {x}")
 
+        result_set.append('Specular image')
+
         self.ids.result_chooser.values = result_set
 
         self.ids.result_x.text = "-"
@@ -227,8 +244,20 @@ class ResultWindow(Screen):
         self.ids.result_chooser.text = 'Choose an object'
 
     def on_selection(self):
+        if self.ids.result_chooser.text == 'Choose an object' or self.ids.result_chooser.text == 'Processing':
+            return
 
-        if self.ids.result_chooser.text == 'Choose an object':
+        if self.ids.result_chooser.text == 'Specular image':
+            self.ids.result_x.text = "-"
+            self.ids.result_y.text = "-"
+            self.ids.result_z.text = "-"
+
+            frame = self.images_set[-1]
+            buf1 = cv2.flip(frame, 0)
+            buf = buf1.tostring()
+            texture1 = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
+            texture1.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+            self.ids.result_image.texture = texture1
             return
 
         object_name = self.ids.result_chooser.text
